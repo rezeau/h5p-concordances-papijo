@@ -1,0 +1,15 @@
+{
+  "name": "h5p-concordances-papijo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Standalone concordance activity with automatic gaps, category filtering, partial scoring, results, Retry, saved-state restoration and xAPI completion.",
+  "license": "MIT",
+  "scripts": {
+    "check:syntax": "node --check scripts/concordances-utils.js && node --check scripts/concordances-session.js && node --check scripts/concordances-state.js && node --check scripts/concordances-renderer.js && node --check scripts/h5p-concordances-papijo.js",
+    "validate": "node --test tests/metadata.test.cjs",
+    "test": "node --test tests/*.test.cjs"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

@@ -1,0 +1,418 @@
+[
+  {
+    "name": "activity",
+    "type": "group",
+    "label": "Activity",
+    "description": "Paste concordance lines containing the target word. Gaps are generated automatically. Configure LancsBox X to export only LEFT, NODE and RIGHT columns; three-column tab-separated exports are supported.",
+    "importance": "high",
+    "fields": [
+      {
+        "name": "title",
+        "type": "text",
+        "label": "Title",
+        "importance": "high",
+        "optional": false
+      },
+      {
+        "name": "introduction",
+        "type": "text",
+        "widget": "textarea",
+        "label": "Introduction",
+        "optional": true
+      },
+      {
+        "name": "distractors",
+        "type": "text",
+        "widget": "textarea",
+        "label": "Global distractors",
+        "description": "Enter one word or expression per line. The global answer pool also includes the correct words from every Set.",
+        "optional": true
+      },
+      {
+        "name": "enableCategories",
+        "type": "boolean",
+        "label": "Enable categories",
+        "default": false
+      },
+      {
+        "name": "sets",
+        "type": "list",
+        "label": "Sets",
+        "entity": "Set",
+        "importance": "high",
+        "min": 1,
+        "defaultNum": 1,
+        "widgets": [
+          {
+            "name": "VerticalTabs",
+            "label": "Default"
+          }
+        ],
+        "field": {
+          "name": "set",
+          "type": "group",
+          "label": "Set",
+          "fields": [
+            {
+              "name": "word",
+              "type": "text",
+              "label": "Concordance Word",
+              "description": "Correct words must be unique across all Sets after Unicode normalization, surrounding-whitespace trimming and case-insensitive comparison. The standard editor does not check duplicates; duplicate words may still be saved.",
+              "importance": "high",
+              "optional": false
+            },
+            {
+              "name": "context",
+              "type": "text",
+              "widget": "textarea",
+              "label": "Context",
+              "description": "Paste concordance lines containing the target word. Gaps are generated automatically. Supports ordinary KWIC and LancsBox X three-column tab-separated exports (LEFT, NODE, RIGHT). Do not mix formats or insert underscore gaps. Surrounding ordinary KWIC spacing is preserved.",
+              "optional": false
+            },
+            {
+              "name": "category",
+              "type": "text",
+              "label": "Category",
+              "description": "One optional category name for this Set. A comma is part of the name, not a category separator. Used only when categories are enabled.",
+              "optional": true,
+              "widget": "showWhen",
+              "showWhen": {
+                "rules": [
+                  {
+                    "field": "../../enableCategories",
+                    "equals": true
+                  }
+                ],
+                "nullWhenHidden": false
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "expanded": true
+  },
+  {
+    "name": "behaviour",
+    "type": "group",
+    "label": "Behavioural settings",
+    "description": "Standalone lifecycle controls. Retry is available after final results when enabled; Show solution is not used.",
+    "widget": "none",
+    "fields": [
+      {
+        "name": "enableRetry",
+        "type": "boolean",
+        "label": "Enable Retry activity",
+        "default": true
+      },
+      {
+        "name": "enableSolutionsButton",
+        "type": "boolean",
+        "label": "Enable Show solution",
+        "default": false
+      }
+    ],
+    "expanded": false
+  },
+  {
+    "name": "l10n",
+    "type": "group",
+    "label": "Learner text",
+    "common": true,
+    "fields": [
+      {
+        "name": "placeholderTitle",
+        "type": "text",
+        "label": "Default activity title",
+        "default": "Concordances Papi Jo"
+      },
+      {
+        "name": "foundationMessage",
+        "type": "text",
+        "label": "Activity instructions",
+        "default": "Select the word or expression that completes each concordance Set."
+      },
+      {
+        "name": "selectCategory",
+        "type": "text",
+        "label": "Select category",
+        "default": "Select a category"
+      },
+      {
+        "name": "allCategories",
+        "type": "text",
+        "label": "All categories",
+        "default": "All categories"
+      },
+      {
+        "name": "uncategorized",
+        "type": "text",
+        "label": "Uncategorized",
+        "default": "Uncategorized"
+      },
+      {
+        "name": "selectedCategory",
+        "type": "text",
+        "label": "Selected category",
+        "default": "Category: @category"
+      },
+      {
+        "name": "start",
+        "type": "text",
+        "label": "Start",
+        "default": "Start"
+      },
+      {
+        "name": "progress",
+        "type": "text",
+        "label": "Set progress",
+        "default": "Set @current of @total"
+      },
+      {
+        "name": "answerLabel",
+        "type": "text",
+        "label": "Answer label",
+        "default": "Concordance word"
+      },
+      {
+        "name": "selectAnswer",
+        "type": "text",
+        "label": "Answer prompt",
+        "default": "Select a word or expression"
+      },
+      {
+        "name": "check",
+        "type": "text",
+        "label": "Check",
+        "default": "Check"
+      },
+      {
+        "name": "next",
+        "type": "text",
+        "label": "Next",
+        "default": "Next"
+      },
+      {
+        "name": "retry",
+        "type": "text",
+        "label": "Retry activity",
+        "default": "Retry activity"
+      },
+      {
+        "name": "correct",
+        "type": "text",
+        "label": "Correct feedback",
+        "default": "Correct"
+      },
+      {
+        "name": "incorrect",
+        "type": "text",
+        "label": "Incorrect feedback",
+        "default": "Incorrect"
+      },
+      {
+        "name": "answerRequired",
+        "type": "text",
+        "label": "Missing answer feedback",
+        "default": "Select an answer before checking."
+      },
+      {
+        "name": "resultsTitle",
+        "type": "text",
+        "label": "Results title",
+        "default": "Results"
+      },
+      {
+        "name": "totalScore",
+        "type": "text",
+        "label": "Total score",
+        "default": "Final score: @score/@max"
+      },
+      {
+        "name": "firstAttemptCount",
+        "type": "text",
+        "label": "First-attempt successes",
+        "default": "Correct on the first attempt: @count"
+      },
+      {
+        "name": "secondAttemptCount",
+        "type": "text",
+        "label": "Second-attempt successes",
+        "default": "Correct on the second attempt: @count"
+      },
+      {
+        "name": "laterAttemptCount",
+        "type": "text",
+        "label": "Later successes",
+        "default": "Correct on the third or a later attempt: @count"
+      },
+      {
+        "name": "resultSet",
+        "type": "text",
+        "label": "Result Set heading",
+        "default": "Set"
+      },
+      {
+        "name": "resultWord",
+        "type": "text",
+        "label": "Result word heading",
+        "default": "Word"
+      },
+      {
+        "name": "resultAttempts",
+        "type": "text",
+        "label": "Result attempts heading",
+        "default": "Attempts"
+      },
+      {
+        "name": "resultPoints",
+        "type": "text",
+        "label": "Result score heading",
+        "default": "Score"
+      },
+      {
+        "name": "setLabel",
+        "type": "text",
+        "label": "Preview Set label",
+        "default": "Set @set"
+      },
+      {
+        "name": "invalidContentTitle",
+        "type": "text",
+        "label": "Invalid content title",
+        "default": "Content needs correction"
+      },
+      {
+        "name": "invalidContentDescription",
+        "type": "text",
+        "label": "Invalid content description",
+        "default": "The activity is unavailable. The author must correct the following problems."
+      },
+      {
+        "name": "runtimeError",
+        "type": "text",
+        "label": "Unexpected checking failure",
+        "default": "Checking is unavailable. Please reload the activity."
+      },
+      {
+        "name": "sequenceEnd",
+        "type": "text",
+        "label": "End of sequence",
+        "default": "You have reached the end of this sequence."
+      },
+      {
+        "name": "attemptSingular",
+        "type": "text",
+        "label": "One accepted attempt",
+        "default": "@count attempt"
+      },
+      {
+        "name": "attemptPlural",
+        "type": "text",
+        "label": "Multiple accepted attempts",
+        "default": "@count attempts"
+      }
+    ]
+  },
+  {
+    "name": "a11y",
+    "type": "group",
+    "label": "Accessibility text",
+    "common": true,
+    "fields": [
+      {
+        "name": "missingWord",
+        "type": "text",
+        "label": "Gap text",
+        "default": "missing word"
+      },
+      {
+        "name": "correctAnswer",
+        "type": "text",
+        "label": "Correct answer announcement",
+        "default": "Correct. The missing word is @word."
+      },
+      {
+        "name": "incorrectAnswer",
+        "type": "text",
+        "label": "Incorrect answer announcement",
+        "default": "Incorrect. Try again."
+      },
+      {
+        "name": "kwicRegion",
+        "type": "text",
+        "label": "Scrollable Context label",
+        "default": "Concordance context. Scroll horizontally to read long lines."
+      },
+      {
+        "name": "contextAlternative",
+        "type": "text",
+        "label": "Accessible Context label",
+        "default": "Concordance context in reading order"
+      }
+    ]
+  },
+  {
+    "name": "validation",
+    "type": "group",
+    "label": "Author validation text",
+    "description": "Runtime diagnostic messages. Standard editor saving is not intercepted. Alignment warnings remain deferred.",
+    "common": true,
+    "fields": [
+      {
+        "name": "duplicateWord",
+        "type": "text",
+        "label": "Duplicate correct word error",
+        "default": "Sets @sets use the same correct word after Unicode normalization, surrounding-whitespace trimming and case-insensitive comparison."
+      },
+      {
+        "name": "noSets",
+        "type": "text",
+        "label": "No Sets error",
+        "default": "At least one Set is required."
+      },
+      {
+        "name": "missingWord",
+        "type": "text",
+        "label": "Missing word error",
+        "default": "Set @set: A correct word is required."
+      },
+      {
+        "name": "missingContext",
+        "type": "text",
+        "label": "Missing Context error",
+        "default": "Set @set: Context is required."
+      },
+      {
+        "name": "automaticMissingTarget",
+        "type": "text",
+        "label": "Automatic target missing",
+        "default": "Set @set, line @line: No safely matched target word. Automatic gaps require a matching occurrence on every nonempty line and grapheme segmentation support."
+      },
+      {
+        "name": "automaticManualGap",
+        "type": "text",
+        "label": "Manual gap in automatic mode",
+        "default": "Set @set, line @line: Underscore gaps are unsupported. Paste the original target word."
+      },
+      {
+        "name": "malformedLancsBox",
+        "type": "text",
+        "label": "Malformed LancsBox row",
+        "default": "Set @set, line @line: Malformed LancsBox row; expected LEFT, NODE and RIGHT in exactly three tab-separated fields."
+      },
+      {
+        "name": "mixedContextFormats",
+        "type": "text",
+        "label": "Mixed Context formats",
+        "default": "Set @set, line @line: Do not mix ordinary KWIC lines and LancsBox rows in one Context."
+      },
+      {
+        "name": "ambiguousLancsBox",
+        "type": "text",
+        "label": "Ambiguous LancsBox row",
+        "default": "Set @set, line @line: Ambiguous tabular input; NODE must contain a safe match for the target word. Use LEFT, NODE and RIGHT columns only."
+      }
+    ]
+  }
+]

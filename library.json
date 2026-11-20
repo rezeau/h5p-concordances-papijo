@@ -1,0 +1,59 @@
+{
+  "machineName": "H5P.ConcordancesPapiJo",
+  "title": "Concordances Papi Jo",
+  "description": "Standalone concordance activity with automatic gaps, category filtering, partial scoring, results, Retry, saved-state restoration and xAPI completion.",
+  "majorVersion": 1,
+  "minorVersion": 0,
+  "patchVersion": 0,
+  "runnable": 1,
+  "author": "Papi Jo",
+  "license": "MIT",
+  "coreApi": {
+    "majorVersion": 1,
+    "minorVersion": 28
+  },
+  "embedTypes": [
+    "iframe"
+  ],
+  "preloadedJs": [
+    {
+      "path": "scripts/concordances-utils.js"
+    },
+    {
+      "path": "scripts/concordances-session.js"
+    },
+    {
+      "path": "scripts/concordances-state.js"
+    },
+    {
+      "path": "scripts/concordances-renderer.js"
+    },
+    {
+      "path": "scripts/h5p-concordances-papijo.js"
+    }
+  ],
+  "preloadedCss": [
+    {
+      "path": "styles/h5p-concordances-papijo.css"
+    }
+  ],
+  "preloadedDependencies": [
+    {
+      "machineName": "H5P.Question",
+      "majorVersion": 1,
+      "minorVersion": 5
+    }
+  ],
+  "editorDependencies": [
+    {
+      "machineName": "H5PEditor.VerticalTabs",
+      "majorVersion": 1,
+      "minorVersion": 3
+    },
+    {
+      "machineName": "H5PEditor.ShowWhen",
+      "majorVersion": 1,
+      "minorVersion": 0
+    }
+  ]
+}
