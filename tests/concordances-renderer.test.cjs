@@ -89,3 +89,33 @@ test('all ten fresco rows retain NODE alignment, suffixes, natural accessible or
   assert.deepEqual(view.accessibleLines.map(node=>node.textContent),expected.split('\n'));
   assert.equal(findAll(view.pre,node=>node.className==='h5p-concordances-papijo-kwic-number').length,0);
 });
+
+
+test('spelling feedback highlights code-point edits without changing source text or revealing omissions',()=>{
+  for(const [answer,target,highlight,before,omission] of [
+    ['frescp','fresco','p','fresc',false],['frescco','fresco','c','fresc',false],
+    ['fresoc','fresco','oc','fres',false],['fresc','fresco','','fresc',true],
+    ['resco','fresco','','',true],[' FRÉscp ','frésco','p',' FRÉsc',false],
+    ['E\u0301ternxl','éternel','x','E\u0301tern',false],
+    ['\u{10428}cbde','\u{10428}bcde','cb','\u{10428}',false]
+  ]){
+    const view=renderer.renderSpellingWarning(createDocument(),answer,target,'Check your spelling: @answer');
+    const text=view.element.children[0],mark=text.children[0];
+    assert.equal(view.element.textContent,'Check your spelling: '+(omission ? before+'_'+answer.slice(before.length) : answer)+(omission?' A letter is missing.':''));
+    assert.equal(view.announcement,'Check your spelling: '+answer+(omission?' A letter is missing.':''));
+    assert.equal(mark.textContent,omission?'_':highlight);assert.equal(text.childNodes[0].data,before);
+    assert.equal(mark.className,omission?'h5p-concordances-papijo-spelling-error h5p-concordances-papijo-spelling-omission':'h5p-concordances-papijo-spelling-error');
+    if(omission)assert.equal(mark.getAttribute('aria-hidden'),'true');
+  }
+  const unsafe=renderer.renderSpellingWarning(createDocument(),'<img onerror=x> &quot;','fresco','Check your spelling: @answer');
+  assert.equal(unsafe.element.textContent,'Check your spelling: <img onerror=x> &quot;');assert.equal(findAll(unsafe.element,n=>n.tagName==='IMG').length,0);
+});
+
+
+test('missing-letter underscores retain raw Unicode grapheme boundaries and never reveal target characters',()=>{
+  for(const [answer,target,expected] of [['freco','fresco','fre_co'],['bcde','\u{10428}bcde','_bcde'],['E\u0301terel','éternel','E\u0301ter_el']]){
+    const view=renderer.renderSpellingWarning(createDocument(),answer,target,'Check your spelling: @answer');
+    assert.equal(view.element.children[0].textContent,expected);const marks=findAll(view.element,node=>node.className.includes('spelling-omission'));assert.equal(marks.length,1);assert.equal(marks[0].textContent,'_');assert.equal(marks[0].getAttribute('aria-hidden'),'true');
+    assert.equal(view.announcement,'Check your spelling: '+answer+' A letter is missing.');
+  }
+});

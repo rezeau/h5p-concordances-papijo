@@ -214,6 +214,46 @@
     return section;
   }
 
+  /** Display-only edit mapping: never rewrite input or expose target characters. */
+  function renderSpellingWarning(document, answer, target, template, missingLetter = 'A letter is missing.') {
+    const line = element(document, 'span', 'h5p-concordances-papijo-spelling-line');
+    const label = template.split('@answer');
+    line.appendChild(document.createTextNode(label[0]));
+    const text = element(document, 'span', 'h5p-concordances-papijo-spelling-answer');
+    let start = -1, end = -1, omission = false;
+    if (utilities.isMinorSpellingError(answer, target)) {
+      const a = Array.from(utilities.normalizeWord(answer)), b = Array.from(utilities.normalizeWord(target));
+      let index = 0;
+      while (index < Math.min(a.length, b.length) && a[index] === b[index]) index++;
+      const leading = answer.length - answer.trimStart().length;
+      const trimmed = answer.trim(), map = [];
+      const segmenter = new Intl.Segmenter('und', {granularity: 'grapheme'});
+      for (const segment of segmenter.segment(trimmed)) {
+        const range = {start: leading + segment.index, end: leading + segment.index + segment.segment.length};
+        for (const point of Array.from(utilities.normalizeWord(segment.segment))) map.push(range);
+      }
+      if (map.length === a.length) {
+        start = map[index]?.start ?? leading + trimmed.length;
+        omission = a.length < b.length;
+        const swapped = a.length === b.length && a[index] === b[index + 1] && a[index + 1] === b[index];
+        end = omission ? start : map[index + (swapped ? 1 : 0)].end;
+      }
+    }
+    if (start < 0) text.appendChild(document.createTextNode(answer));
+    else {
+      text.appendChild(document.createTextNode(answer.slice(0, start)));
+      const mark = element(document, 'span', omission ? 'h5p-concordances-papijo-spelling-error h5p-concordances-papijo-spelling-omission'
+        : 'h5p-concordances-papijo-spelling-error', omission ? '_' : answer.slice(start, end));
+      if (omission) mark.setAttribute('aria-hidden', 'true');
+      text.appendChild(mark);
+      text.appendChild(document.createTextNode(answer.slice(end)));
+    }
+    line.appendChild(text);
+    line.appendChild(document.createTextNode(label.slice(1).join('@answer')));
+    if (omission) line.appendChild(element(document, 'span', 'h5p-concordances-papijo-sr-only', ' ' + missingLetter));
+    return {element: line, announcement: template.replace('@answer', () => answer) + (omission ? ' ' + missingLetter : '')};
+  }
+
   /** Replace pool options safely; values stay opaque and carry no correct-answer marker. */
   function populateAnswers(answerSelect, answers, l10n) {
     const document = answerSelect.ownerDocument;
@@ -260,12 +300,32 @@
 
     const answerLabel = element(document, 'label', 'h5p-concordances-papijo-control-label', options.l10n.answerLabel);
     answerLabel.setAttribute('for', options.domId + '-answer');
-    const answerSelect = element(document, 'select', 'h5p-concordances-papijo-select');
+    const typed = session.answerMode === 'typed';
+    const answerSelect = element(document, typed ? 'input' : 'select',
+      typed ? 'h5p-concordances-papijo-input' : 'h5p-concordances-papijo-select');
+    if (typed) {
+      answerSelect.setAttribute('type', 'text');
+      answerSelect.setAttribute('autocomplete', 'off');
+      answerSelect.setAttribute('autocapitalize', 'none');
+      answerSelect.setAttribute('spellcheck', 'false');
+    }
     answerSelect.id = options.domId + '-answer';
     answerSelect.setAttribute('aria-describedby', [categorySummary && categorySummary.id, progress.id].filter(Boolean).join(' '));
-    populateAnswers(answerSelect, session.answers, options.l10n);
+    if (!typed) populateAnswers(answerSelect, session.answers, options.l10n);
     container.appendChild(answerLabel);
     container.appendChild(answerSelect);
+    let hintStatus = null;
+    let hintReveal = null;
+    if (typed && options.enableHints) {
+      hintStatus = element(document, 'p', 'h5p-concordances-papijo-hint-status');
+      hintStatus.id = options.domId + '-hint-status';
+      hintStatus.setAttribute('role', 'note');
+      container.appendChild(hintStatus);
+      hintReveal = element(document, 'p', 'h5p-concordances-papijo-hint-reveal');
+      hintReveal.hidden = true;
+      container.appendChild(hintReveal);
+      answerSelect.setAttribute('aria-describedby', answerSelect.getAttribute('aria-describedby') + ' ' + hintStatus.id);
+    }
     const feedback = element(document, 'p', 'h5p-concordances-papijo-feedback');
     feedback.id = options.domId + '-feedback';
     // Static description and one separate live message avoid reading feedback twice
@@ -282,8 +342,8 @@
     container.appendChild(sequenceEnd);
     const resultsHost = element(document, 'div', 'h5p-concordances-papijo-results-host');
     container.appendChild(resultsHost);
-    return {element: container, categorySelect, categorySummary, progress, setHost, answerSelect, feedback, announcement, sequenceEnd, resultsHost};
+    return {element: container, hintStatus, hintReveal, categorySelect, categorySummary, progress, setHost, answerSelect, answerControl: answerSelect, feedback, announcement, sequenceEnd, resultsHost};
   }
 
-  return Object.freeze({renderSet, revealSet, renderDiagnostics, categoryLabel, renderResults, populateAnswers, renderSelectionControls});
+  return Object.freeze({renderSpellingWarning, renderSet, revealSet, renderDiagnostics, categoryLabel, renderResults, populateAnswers, renderSelectionControls});
 });

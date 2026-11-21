@@ -163,6 +163,41 @@
     return {tokens: errors.length ? [] : tokens, errors};
   }
 
-  return Object.freeze({ normalizeConcordance,
+  function resolveAnswerMode(behaviour) {
+    return behaviour && behaviour.answerMode === 'typed' ? 'typed' : 'dropdown';
+  }
+
+  function resolveTypedPenalty(behaviour) {
+    return resolveAnswerMode(behaviour) === 'typed' &&
+      (behaviour.typedPenalty === '0.5' || behaviour.typedPenalty === 0.5) ? 0.5 : 1;
+  }
+
+  function resolveSpellingPolicy(behaviour) {
+    return resolveAnswerMode(behaviour) === 'typed' && behaviour.spellingErrorBehaviour === 'warn'
+      ? behaviour.spellingErrorBehaviour : 'mistake';
+  }
+
+  /** Distance exactly one, including adjacent swaps; compare normalized code points. */
+  function isMinorSpellingError(answer, target) {
+    const a = Array.from(normalizeWord(answer)), b = Array.from(normalizeWord(target));
+    if (b.length < 5 || a.length < 4 || Math.abs(a.length - b.length) > 1 ||
+      !/^[\p{L}\p{M}]+$/u.test(a.join('')) || !/^[\p{L}\p{M}]+$/u.test(b.join(''))) return false;
+    let index = 0;
+    while (index < Math.min(a.length, b.length) && a[index] === b[index]) index++;
+    const same = (left, right) => left.join('') === right.join('');
+    if (index === Math.min(a.length, b.length)) return a.length !== b.length;
+    if (a.length > b.length) return same(a.slice(index + 1), b.slice(index));
+    if (b.length > a.length) return same(a.slice(index), b.slice(index + 1));
+    return same(a.slice(index + 1), b.slice(index + 1)) ||
+      a[index] === b[index + 1] && a[index + 1] === b[index] && same(a.slice(index + 2), b.slice(index + 2));
+  }
+
+  function resolveWarningAllowance(behaviour) {
+    if (resolveSpellingPolicy(behaviour) !== 'warn') return 1;
+    const value = behaviour.freeSpellingWarnings;
+    return value === 'unlimited' ? 'unlimited' : value === 1 || value === '1' ? 1 : value === 3 || value === '3' ? 3 : 2;
+  }
+
+  return Object.freeze({ resolveWarningAllowance, resolveSpellingPolicy, isMinorSpellingError, resolveTypedPenalty, resolveAnswerMode, normalizeConcordance,
     normalizeWord, wordsMatch, findDuplicateWords, validateSets, decodeEditorText, tokenizeAutomaticContext });
 });

@@ -8,19 +8,39 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument('--libraries', type=Path, required=True, help='Read-only directory of installed H5P dependency libraries')
-LIBRARIES = parser.parse_args().libraries.resolve()
-OUTPUT = ROOT / 'release/1.0.0'
-STAGE = OUTPUT / 'staging'
-PACKAGE = OUTPUT / 'H5P.ConcordancesPapiJo-1.0.0.h5p'
-assert not PACKAGE.exists(), 'Refusing to overwrite an existing package'
-# Staging may remain after a failed pre-archive check; final packages never overwrite.
-OUTPUT.mkdir(parents=True, exist_ok=True)
-STAGE.mkdir(exist_ok=True)
 
 def read(path):
     return json.loads(path.read_text(encoding='utf-8'))
+
+def release_plan(root, version):
+    """Read-only preflight; never relabel mismatched source or reuse staging."""
+    if not re.fullmatch(r'(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)', version):
+        raise ValueError('Release version must be major.minor.patch')
+    if tuple(map(int, version.split('.'))) < (1, 1, 0):
+        raise ValueError('The accepted 1.0.0 release is immutable; use 1.1.0 or later')
+    main = read(root / 'library.json')
+    if [main[v] for v in ('majorVersion', 'minorVersion', 'patchVersion')] != list(map(int, version.split('.'))):
+        raise ValueError('library.json version must match the requested release; no files were written')
+    if read(root / 'package.json')['version'] != version:
+        raise ValueError('package.json version must match the requested release; no files were written')
+    if main['coreApi'] != {'majorVersion': 1, 'minorVersion': 28}:
+        raise ValueError('Release requires H5P Core API 1.28')
+    output = root / 'release' / version
+    package = output / f'H5P.ConcordancesPapiJo-{version}.h5p'
+    if output.exists():
+        raise FileExistsError('Refusing to reuse release output or overwrite an existing archive: ' + str(output))
+    return main, output, output / 'staging', package
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--libraries', type=Path, required=True, help='Read-only directory of installed H5P dependency libraries')
+parser.add_argument('--version', default='1.1.0', help='Release version; must match source declarations (default: 1.1.0)')
+args = parser.parse_args()
+LIBRARIES = args.libraries.resolve()
+main, OUTPUT, STAGE, PACKAGE = release_plan(ROOT, args.version)
+# Exclusive creation prevents races and stale files from failed staging runs.
+# Failed output is retained for inspection; it must be handled before another build.
+OUTPUT.mkdir(parents=True, exist_ok=False)
+STAGE.mkdir(exist_ok=False)
 
 def write(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -81,10 +101,6 @@ for name, (source, manifest) in closure.items():
             shutil.copyfile(source / license_name, STAGE / name / 'LICENSE.txt')
             break
 
-main = read(ROOT / 'library.json')
-assert [main[v] for v in ('majorVersion', 'minorVersion', 'patchVersion')] == [1, 0, 0]
-assert read(ROOT / 'package.json')['version'] == '1.0.0'
-assert main['coreApi'] == {'majorVersion': 1, 'minorVersion': 28}
 runtime = {}
 def runtime_walk(manifest):
     runtime[key(manifest)] = {field: manifest[field] for field in ('machineName', 'majorVersion', 'minorVersion')}
@@ -94,7 +110,7 @@ def runtime_walk(manifest):
                 runtime_walk(closure[key(dependency)][1])
 runtime_walk(main)
 write(STAGE / 'h5p.json', {
-    'title': 'Concordances Papi Jo 1.0.0 — standalone installation check',
+    'title': f'Concordances Papi Jo {args.version} — standalone installation check',
     'language': 'en', 'mainLibrary': main['machineName'], 'embedTypes': ['iframe'],
     'preloadedDependencies': list(runtime.values())
 })

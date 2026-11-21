@@ -1,3 +1,38 @@
+# H5P.ConcordancesPapiJo 1.1.0
+
+Requires H5P Core API 1.28 and a modern browser with Intl.Segmenter support.
+
+- Typed answers alongside the existing dropdown default.
+- Optional adaptive progressive letter hints based on the latest checked answer;
+  each revealing request costs 0.5 points. Hints are disabled by default.
+- Typed spelling warnings with 1, 2 (default), 3 or unlimited free warnings per
+  Set. Exact correction is required; repeated warned answers are blocked.
+- Configurable typed incorrect-attempt penalties of 1 (default) or 0.5 points,
+  with fractional activity results and xAPI scores.
+- Set order: Shuffle Sets (default) or Keep author-defined order. Category
+  eligibility is unchanged; restoration retains the saved run order and Retry
+  follows the selected policy.
+- Saved-state support for dropdown, typed answers, spelling-warning history and
+  adaptive hints (schemas 1/2/4/5), plus accessible spelling feedback, hint
+  descriptions, keyboard/IME handling and quiet restoration.
+
+The exact package passed validation and user-reported independent WordPress
+installation and Firefox acceptance.
+
+**WordPress compatibility:** WordPress H5P plugin 1.17.10 does not preserve
+fractional scores in My Results because its results pipeline uses integer-only
+validation, storage and display. Concordances itself reports fractional scores
+correctly through its activity results and xAPI. This release does not fix the
+WordPress integration; successful installation/Firefox acceptance does not imply
+fractional My Results support.
+
+The upstream jQuery UI missing-sprite qualification and the official
+ShowWhen/ShowWhenpapijo global-widget collision risk remain. Optional learner
+Hint Help (?) remains deferred. See the
+[technical release record](docs/release-1.1.0.md).
+
+---
+
 # H5P.ConcordancesPapiJo 1.0.0
 
 First stable standalone release, requiring H5P Core API 1.28.

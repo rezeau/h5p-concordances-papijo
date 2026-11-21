@@ -160,3 +160,114 @@ test('strict validation rejects malformed, partial and inconsistent candidates w
   assert.equal(accessed, false);
   assert.deepEqual(stateModel.createState(activity, session), valid);
 });
+
+
+const typedMode={answerMode:'typed'};
+const typedActivity={enableCategories:true,distractors:'Ignored',sets:[{word:'can&#039;t',context:"CAN'T",category:'A'},{word:'Two',context:'TWO',category:'B'}]};
+const typedSession=()=>model.createSelectionSession(typedActivity,keepOrder,null,'typed');
+const saveTyped=session=>stateModel.createState(typedActivity,session);
+const restoreTyped=saved=>stateModel.restoreSession(typedActivity,saved,typedMode);
+
+test('schema-1 published fixture remains exact for absent and explicit dropdown mode',()=>{
+  const fixture=require('./fixtures/schema1-release-1.0.0.json');
+  for(const mode of [undefined,{answerMode:'dropdown'}]){
+    assert.equal(stateModel.fingerprint(fixture.activity,mode),fixture.state.fingerprint);
+    assert.equal(stateModel.validateState(fixture.activity,fixture.state,mode).valid,true);
+    const restored=stateModel.restoreSession(fixture.activity,fixture.state,mode);
+    assert.deepEqual(stateModel.createState(fixture.activity,restored),fixture.state);
+  }
+});
+
+test('typed schema 2 preserves partial, incorrect, changed-back, changed and solved values without shuffling',()=>{
+  const session=typedSession();
+  const check=()=>{
+    const saved=saveTyped(session),copy=clone(saved);assert.equal(saved.version,2);assert.equal(saved.answerMode,'typed');
+    assert.equal(Object.hasOwn(saved,'answerOrder'),false);
+    assert.equal(stateModel.validateState(typedActivity,freeze(copy),typedMode).valid,true);
+    const restored=restoreTyped(copy);assert.ok(restored);assert.deepEqual(saveTyped(restored),saved);
+    assert.equal(restored.canCheck(),session.canCheck());assert.equal(restored.getScore(),session.getScore());
+    assert.equal(restored.getSetState().typedText,session.getSetState().typedText);
+    return restored;
+  };
+  session.setTypedAnswer('  PaRtiAL  ');check();
+  session.setTypedAnswer('wrong');session.checkAnswer();check();
+  session.setTypedAnswer(' WRONG ');assert.equal(check().canCheck(),false);
+  session.setTypedAnswer('different');check();session.setTypedAnswer('wrong');assert.equal(check().canCheck(),false);
+  session.setTypedAnswer(" CAN'T ");check();session.checkAnswer();check();
+  session.advance(session.displayedSetIndex);session.setTypedAnswer('two');session.checkAnswer();
+  assert.equal(check().allSolved,true);
+  const markup=typedSession();markup.setTypedAnswer('<img onerror=x> &quot;');assert.equal(restoreTyped(saveTyped(markup)).getSetState().typedText,'<img onerror=x> &quot;');
+});
+
+test('typed fingerprint ignores distractors, rejects mode/content changes and retains category identity across reordering',()=>{
+  const session=typedSession();session.selectCategory('category-0');session.setTypedAnswer("can't");session.checkAnswer();
+  const saved=saveTyped(session);
+  const changed={...typedActivity,distractors:'Completely different',sets:typedActivity.sets.slice().reverse()};
+  assert.equal(stateModel.fingerprint(changed,typedMode),saved.fingerprint);
+  assert.ok(stateModel.restoreSession(changed,saved,typedMode));
+  assert.equal(stateModel.restoreSession(typedActivity,saved),null);
+  const dropdown=stateModel.createState(typedActivity,model.createSelectionSession(typedActivity,keepOrder));
+  assert.equal(restoreTyped(dropdown),null);
+  for(const mutate of [a=>a.sets[0].word='Other',a=>a.sets[0].context+=' ',a=>a.enableCategories=false,a=>a.sets[0].category='C']){
+    const copy=clone(typedActivity);mutate(copy);assert.equal(stateModel.restoreSession(copy,saved,typedMode),null);
+  }
+});
+
+test('typed strict validation rejects malformed and impossible snapshots without executing accessors',()=>{
+  const session=typedSession();session.setTypedAnswer('wrong');session.checkAnswer();const saved=saveTyped(session);
+  const changes=[s=>s.version=1,s=>s.answerMode='dropdown',s=>s.fingerprint='cpj1:bad',s=>s.answerOrder=[],s=>s.score=99,
+    s=>s.setOrder.reverse(),s=>s.setOrder[1]=s.setOrder[0],s=>s.category=['named','absent'],s=>s.position=9,s=>s.locked=false,
+    s=>s.results=true,s=>s.sets[0][2]=-1,s=>s.sets[0][2]=1.5,s=>s.sets[0][2]=Number.MAX_SAFE_INTEGER+1,
+    s=>s.sets[0][1]={html:'bad'},s=>s.sets[0][1]='line\nbreak',s=>s.sets[0][3]=true,s=>s.sets[0][5]=null,
+    s=>s.sets[0][5]=' WRONG ',s=>s.sets[0][5]="can't",s=>s.sets[0][1]='different',s=>s.sets[1][1]='future input',
+    s=>s.sets[0].push('extra'),s=>s.sets.pop()];
+  // Reversing order alone would move the checked Set into the future and is invalid.
+  for(const mutate of changes){const copy=clone(saved);mutate(copy);assert.equal(stateModel.validateState(typedActivity,copy,typedMode).valid,false);}
+  let reads=0;const malicious=clone(saved);Object.defineProperty(malicious.sets[0],'1',{get(){reads++;return 'bad';},enumerable:true});
+  assert.equal(stateModel.validateState(typedActivity,malicious,typedMode).valid,false);assert.equal(reads,0);
+});
+
+
+test('typed penalty compatibility preserves legacy one-point domain and restores all half-point stages',()=>{
+  const activity={sets:[{word:'One',context:'ONE'}],distractors:'Ignored'};
+  const one={answerMode:'typed',typedPenalty:'1'},half={answerMode:'typed',typedPenalty:'0.5'};
+  // Reference canonical input from Phase 2A-3, before scoring was configurable.
+  const canonical=[2,'typed',false,[['one','One','ONE',null]],['automatic-gaps',1]];
+  let a=0x811c9dc5,b=0x9e3779b9;for(const character of JSON.stringify(canonical)){a=Math.imul(a^character.charCodeAt(0),0x01000193)>>>0;b=Math.imul(b^character.charCodeAt(0),0x85ebca6b)>>>0;}
+  const legacy='cpj1:'+a.toString(16).padStart(8,'0')+b.toString(16).padStart(8,'0');
+  assert.equal(stateModel.fingerprint(activity,typedMode),legacy);assert.equal(stateModel.fingerprint(activity,one),legacy);
+  assert.notEqual(stateModel.fingerprint(activity,half),legacy);
+  assert.equal(stateModel.fingerprint(activity),stateModel.fingerprint(activity,{answerMode:'dropdown',typedPenalty:'0.5'}));
+  for(const penalty of [1,0.5]){
+    const mode=penalty===1?one:half,other=penalty===1?half:one;
+    const session=model.createSelectionSession(activity,keepOrder,null,'typed',penalty);
+    const roundTrip=()=>{
+      const saved=stateModel.createState(activity,session);
+      const restored=stateModel.restoreSession({...activity,distractors:'Changed'},clone(saved),mode);
+      assert.ok(restored);assert.deepEqual(stateModel.createState(activity,restored),saved);assert.equal(restored.getScore(),session.getScore());
+      assert.equal(restored.canCheck(),session.canCheck());assert.equal(stateModel.restoreSession(activity,saved,other),null);
+      assert.equal(Object.hasOwn(saved,'score'),false);assert.equal(Object.hasOwn(saved,'typedPenalty'),false);
+    };
+    session.setTypedAnswer(' Partial ');roundTrip();session.setTypedAnswer('wrong');session.checkAnswer();roundTrip();session.setTypedAnswer('different');roundTrip();session.setTypedAnswer('One');session.checkAnswer();roundTrip();
+    assert.equal(session.getScore(),2-penalty);
+  }
+});
+
+
+test('warning allowance schema 4 round-trips counts/history with strict cross-allowance rejection',()=>{
+  const activity={enableCategories:true,sets:[{word:'fresco',context:'FRESCOes',category:'A'},{word:'Two',context:'TWO',category:'B'}]};
+  for(const allowance of [1,2,3,'unlimited']){
+    const behaviour={answerMode:'typed',spellingErrorBehaviour:'warn',freeSpellingWarnings:allowance};
+    const session=model.createSelectionSession(activity,keepOrder,null,'typed',1,'warn',allowance);session.selectCategory('category-0');
+    session.setTypedAnswer('fresoc');session.checkAnswer();if(allowance!==1){session.setTypedAnswer('frescp');session.checkAnswer();}
+    const saved=stateModel.createState(activity,session);assert.equal(saved.version,4);assert.equal(saved.warningAllowance,allowance);assert.equal(saved.sets[0][6],allowance===1?1:2);assert.equal(saved.sets[0][8].length,allowance===1?1:2);
+    const restored=stateModel.restoreSession(activity,clone(saved),behaviour);assert.ok(restored);assert.deepEqual(stateModel.createState(activity,restored),saved);assert.equal(restored.getSetState().warningCount,allowance===1?1:2);
+    restored.setTypedAnswer(' FRESOC ');assert.equal(restored.canCheck(),false);restored.setTypedAnswer('fresh');assert.equal(restored.canCheck(),true);
+    for(const other of [1,2,3,'unlimited'].filter(value=>value!==allowance))assert.equal(stateModel.restoreSession(activity,saved,{...behaviour,freeSpellingWarnings:other}),null);
+    assert.equal(stateModel.restoreSession(activity,{...saved,version:3},behaviour),null);
+    for(const mutate of [s=>s.warningAllowance='invalid',s=>s.sets[0][6]=-1,s=>s.sets[0][6]=1.5,s=>s.sets[0][6]=Number.MAX_SAFE_INTEGER+1,s=>s.sets[0][8].push(s.sets[0][8][0]),s=>s.sets[0][8][0]='unrelated',s=>s.sets[0][7]=false,s=>s.sets[1][1]='future',s=>s.locked=false]){
+      const bad=clone(saved);mutate(bad);assert.equal(stateModel.validateState(activity,bad,behaviour).valid,false);
+    }
+  }
+  for(const behaviour of [{},{answerMode:'typed'}])assert.equal(stateModel.fingerprint(activity,behaviour),stateModel.fingerprint(activity,{...behaviour,freeSpellingWarnings:'unlimited'}));
+});

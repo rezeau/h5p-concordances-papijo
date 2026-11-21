@@ -1,0 +1,53 @@
+{
+  "activity": {
+    "enableCategories": true,
+    "distractors": "Wrong",
+    "sets": [
+      {
+        "word": "One",
+        "context": "ONE",
+        "category": "A"
+      },
+      {
+        "word": "Two",
+        "context": "TWO",
+        "category": "B"
+      }
+    ]
+  },
+  "state": {
+    "version": 1,
+    "fingerprint": "cpj1:9e3b3e96c9f91002",
+    "setOrder": [
+      "one",
+      "two"
+    ],
+    "answerOrder": [
+      "one",
+      "two",
+      "wrong"
+    ],
+    "category": [
+      "all"
+    ],
+    "locked": true,
+    "position": 0,
+    "sets": [
+      [
+        "one",
+        "one",
+        1,
+        false,
+        false
+      ],
+      [
+        "two",
+        null,
+        0,
+        false,
+        false
+      ]
+    ],
+    "results": false
+  }
+}

@@ -25,7 +25,7 @@
         "type": "text",
         "widget": "textarea",
         "label": "Global distractors",
-        "description": "Enter one word or expression per line. The global answer pool also includes the correct words from every Set.",
+        "description": "Enter one word or expression per line. The global answer pool also includes the correct words from every Set. Distractors remain stored but are inactive in typed-answer mode.",
         "optional": true
       },
       {
@@ -96,20 +96,163 @@
     "name": "behaviour",
     "type": "group",
     "label": "Behavioural settings",
-    "description": "Standalone lifecycle controls. Retry is available after final results when enabled; Show solution is not used.",
-    "widget": "none",
+    "description": "Choose how learners answer. Dropdown and typed answers use separate saved-state formats; changing mode starts a fresh attempt.",
     "fields": [
+      {
+        "name": "setOrder",
+        "type": "select",
+        "label": "Set order",
+        "default": "shuffle",
+        "options": [
+          {
+            "value": "shuffle",
+            "label": "Shuffle Sets (default)"
+          },
+          {
+            "value": "author",
+            "label": "Keep author-defined order"
+          }
+        ]
+      },
+      {
+        "name": "answerMode",
+        "type": "select",
+        "label": "Answer mode",
+        "default": "dropdown",
+        "options": [
+          {
+            "value": "dropdown",
+            "label": "Select the correct word from a dropdown list"
+          },
+          {
+            "value": "typed",
+            "label": "Type the correct word in a text field"
+          }
+        ]
+      },
+      {
+        "name": "enableProgressiveHints",
+        "type": "boolean",
+        "label": "Enable progressive letter hints in Typed answer mode",
+        "description": "Allow learners to request progressive letter hints after making incorrect attempts. Each hint reduces the available score by 0.5 points.",
+        "default": false,
+        "widget": "showWhen",
+        "showWhen": {
+          "rules": [
+            {
+              "field": "answerMode",
+              "equals": "typed"
+            }
+          ],
+          "nullWhenHidden": false
+        }
+      },
+      {
+        "name": "typedPenalty",
+        "type": "select",
+        "label": "Points deducted per incorrect attempt",
+        "description": "Used only for typed answers. Each solved Set has a maximum of 2 points.",
+        "default": "1",
+        "widget": "showWhen",
+        "showWhen": {
+          "rules": [
+            {
+              "field": "answerMode",
+              "equals": "typed"
+            }
+          ],
+          "nullWhenHidden": false
+        },
+        "options": [
+          {
+            "value": "1",
+            "label": "1 point (existing scoring, default)"
+          },
+          {
+            "value": "0.5",
+            "label": "0.5 point (more forgiving scoring)"
+          }
+        ]
+      },
+      {
+        "name": "spellingErrorBehaviour",
+        "type": "select",
+        "label": "Minor spelling errors",
+        "description": "One character edit is considered only for single words with at least five target characters. Short words and expressions require exact spelling.",
+        "default": "mistake",
+        "widget": "showWhen",
+        "showWhen": {
+          "rules": [
+            {
+              "field": "answerMode",
+              "equals": "typed"
+            }
+          ],
+          "nullWhenHidden": false
+        },
+        "options": [
+          {
+            "value": "mistake",
+            "label": "Treat as a regular mistake (default)"
+          },
+          {
+            "value": "warn",
+            "label": "Warn the learner"
+          }
+        ]
+      },
+      {
+        "name": "freeSpellingWarnings",
+        "type": "select",
+        "label": "Free spelling warnings per Set",
+        "default": "2",
+        "widget": "showWhen",
+        "showWhen": {
+          "rules": [
+            {
+              "field": "answerMode",
+              "equals": "typed"
+            },
+            {
+              "field": "spellingErrorBehaviour",
+              "equals": "warn"
+            }
+          ],
+          "nullWhenHidden": false,
+          "type": "and"
+        },
+        "options": [
+          {
+            "value": "1",
+            "label": "1 warning"
+          },
+          {
+            "value": "2",
+            "label": "2 warnings"
+          },
+          {
+            "value": "3",
+            "label": "3 warnings"
+          },
+          {
+            "value": "unlimited",
+            "label": "Unlimited warnings"
+          }
+        ]
+      },
       {
         "name": "enableRetry",
         "type": "boolean",
         "label": "Enable Retry activity",
-        "default": true
+        "default": true,
+        "widget": "none"
       },
       {
         "name": "enableSolutionsButton",
         "type": "boolean",
         "label": "Enable Show solution",
-        "default": false
+        "default": false,
+        "widget": "none"
       }
     ],
     "expanded": false
@@ -311,6 +454,73 @@
         "type": "text",
         "label": "Multiple accepted attempts",
         "default": "@count attempts"
+      },
+      {
+        "name": "typedInstruction",
+        "type": "text",
+        "label": "Typed-answer instructions",
+        "default": "Type the word or expression that completes each concordance Set."
+      },
+      {
+        "name": "spellingWarning",
+        "type": "text",
+        "label": "Spelling warning",
+        "default": "Check your spelling. Change your answer and try again. This warning does not cost an attempt."
+      },
+      {
+        "name": "spellingWarningAnswer",
+        "type": "text",
+        "label": "Spelling warning with submitted answer",
+        "description": "Use @answer for the learner’s submitted answer.",
+        "default": "Check your spelling: @answer"
+      },
+      {
+        "name": "spellingWarningsExhausted",
+        "type": "text",
+        "label": "Incorrect after spelling warnings are exhausted",
+        "default": "Incorrect — You have used all your free spelling warnings."
+      },
+      {
+        "name": "hint",
+        "type": "text",
+        "label": "hint",
+        "default": "Hint"
+      },
+      {
+        "name": "hintLocked",
+        "type": "text",
+        "label": "hintLocked",
+        "default": "Hint locked: make two scored incorrect attempts."
+      },
+      {
+        "name": "hintLockedWarnings",
+        "type": "text",
+        "label": "hintLockedWarnings",
+        "default": "Hint locked: make two scored incorrect attempts or use all free spelling warnings for this Set."
+      },
+      {
+        "name": "hintAvailable",
+        "type": "text",
+        "label": "hintAvailable",
+        "default": "Hint available"
+      },
+      {
+        "name": "hintAfterRequest",
+        "type": "text",
+        "label": "hintAfterRequest",
+        "default": "Submit an answer with a longer correct prefix to unlock the next hint. At zero points, make a new scored submission."
+      },
+      {
+        "name": "hintRevealed",
+        "type": "text",
+        "label": "hintRevealed",
+        "default": "Letter hint: @hint"
+      },
+      {
+        "name": "hintDescription",
+        "type": "text",
+        "label": "hintDescription",
+        "default": "Each underscore represents an unrevealed letter."
       }
     ]
   },
@@ -349,6 +559,12 @@
         "type": "text",
         "label": "Accessible Context label",
         "default": "Concordance context in reading order"
+      },
+      {
+        "name": "missingLetter",
+        "type": "text",
+        "label": "Missing-letter explanation",
+        "default": "A letter is missing."
       }
     ]
   },

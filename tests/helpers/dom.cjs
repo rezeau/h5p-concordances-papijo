@@ -25,6 +25,7 @@ function createDocument() {
     set tabIndex(value) { this.setAttribute('tabindex', value); }
     get children() { return this.childNodes.filter((child) => child.nodeType === 1); }
     get value() {
+      if (this.tagName === 'INPUT') return this.inputValue ?? '';
       if (this.tagName === 'OPTION') return this.getAttribute('value') ?? this.textContent;
       if (this.tagName === 'SELECT') {
         const desired = this.selectedValue ?? this.children[0]?.value ?? '';
@@ -33,7 +34,12 @@ function createDocument() {
       return this.childNodes.filter((child) => child.nodeType === 3).map((child) => child.data).join('');
     }
     set value(value) {
-      if (this.tagName === 'OPTION') this.setAttribute('value', value);
+      if (this.tagName === 'INPUT') {
+        this.inputValue = String(value);
+        this.valueWrites = (this.valueWrites || 0) + 1;
+        this.selectionStart = this.selectionEnd = this.inputValue.length;
+      }
+      else if (this.tagName === 'OPTION') this.setAttribute('value', value);
       else this.selectedValue = String(value);
     }
     get textContent() { return this.childNodes.map((child) => child.nodeType === 3 ? child.data : child.textContent).join(''); }

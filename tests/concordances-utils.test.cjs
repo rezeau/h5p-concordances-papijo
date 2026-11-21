@@ -147,3 +147,13 @@ test('all declared scripts load in a browser-like VM without Node APIs or custom
   assert.equal(context.H5PEditor, undefined);
   assert.deepEqual(Object.keys(H5P).sort(), ['ConcordancesPapiJo', 'ConcordancesPapiJoRenderer', 'ConcordancesPapiJoSession', 'ConcordancesPapiJoState', 'ConcordancesPapiJoUtils', 'Question', 'jQuery']);
 });
+
+
+test('minor spelling detection uses one normalized code-point edit with conservative word thresholds',()=>{
+  for(const [input,target,expected] of [
+    ['fresco','fresco',false],['fresc','fresco',true],['frescco','fresco',true],['frescp','fresco',true],['fresoc','fresco',true],
+    ['frescoes','fresco',false],['mosaic','fresco',false],['the','then',false],['cat','cart',false],['eternel','éternel',true],
+    ['E\u0301TERNEL','éternel',false],['  FRESOC  ','fresco',true],['bcde','\u{10428}bcde',true],
+    ['\u{10428}cbde','\u{10428}bcde',true],['a word','a words',false],['fresc!','fresco',false]
+  ])assert.equal(utilities.isMinorSpellingError(input,target),expected,input+' / '+target);
+});

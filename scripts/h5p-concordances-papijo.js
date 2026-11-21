@@ -4,7 +4,18 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
   'use strict';
 
   const DEFAULT_TEXT = {
+    hintAvailable: 'Hint available',
+    hintAfterRequest: 'Submit an answer with a longer correct prefix to unlock the next hint. At zero points, make a new scored submission.',
+    hintRevealed: 'Letter hint: @hint',
+    hintDescription: 'Each underscore represents an unrevealed letter.',
+    hintLockedWarnings: 'Hint locked: make two scored incorrect attempts or use all free spelling warnings for this Set.',
+    hintLocked: 'Hint locked: make two scored incorrect attempts.',
+    hint: 'Hint',
     placeholderTitle: 'Concordances Papi Jo',
+    spellingWarningsExhausted: 'Incorrect — You have used all your free spelling warnings.',
+    spellingWarningAnswer: 'Check your spelling: @answer',
+    spellingWarning: 'Check your spelling. Change your answer and try again. This warning does not cost an attempt.',
+    typedInstruction: 'Type the word or expression that completes each concordance Set.',
     foundationMessage: 'Select the word or expression that completes each concordance Set.',
     selectCategory: 'Select a category',
     allCategories: 'All categories',
@@ -33,6 +44,7 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
     invalidContentDescription: 'The activity is unavailable. The author must correct the following problems.'
   };
   const DEFAULT_A11Y = {
+    missingLetter: 'A letter is missing.',
     missingWord: 'missing word',
     correctAnswer: 'Correct. The missing word is @word.',
     incorrectAnswer: 'Incorrect. Try again.',
@@ -95,11 +107,18 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
         title: typeof activity.title === 'string' ? activity.title : '',
         introduction: typeof activity.introduction === 'string' ? activity.introduction : '',
         enableCategories: activity.enableCategories === true,
+        // Bridge the editor location; keep legacy activity values and state domains.
+        setOrder: ['shuffle', 'author'].includes(behaviour.setOrder) ? behaviour.setOrder : activity.setOrder,
         // Contexts and Set records are deliberately left untouched.
         sets: Array.isArray(activity.sets) ? activity.sets.slice() : []
       },
       behaviour: {
         ...behaviour,
+        answerMode: utilities.resolveAnswerMode(behaviour),
+        typedPenalty: utilities.resolveTypedPenalty(behaviour),
+        spellingErrorBehaviour: utilities.resolveSpellingPolicy(behaviour),
+        freeSpellingWarnings: utilities.resolveWarningAllowance(behaviour),
+        enableProgressiveHints: behaviour.enableProgressiveHints === true,
         enableRetry: typeof behaviour.enableRetry === 'boolean' ? behaviour.enableRetry : true,
         enableSolutionsButton: behaviour.enableSolutionsButton === true
       },
@@ -121,6 +140,7 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
         const target = event.data.$target && event.data.$target[0];
         if (target) {
           this.checkButton = target.querySelector('.' + this.domId + '-check');
+          this.hintButton = target.querySelector('.' + this.domId + '-hint');
           const next = target.querySelector('.' + this.domId + '-next');
           if (next && next !== this.nextButton) {
             // Suppress the second click of a native double-click, even when the
@@ -155,7 +175,7 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
       .text(this.getTitle())
       .appendTo($content);
     $('<p>', { class: 'h5p-concordances-papijo-notice', role: 'note' })
-      .text(this.params.l10n.foundationMessage)
+      .text(this.params.behaviour.answerMode === 'typed' ? this.params.l10n.typedInstruction : this.params.l10n.foundationMessage)
       .appendTo($content);
 
     this.validationErrors = utilities.validateSets(this.params.activity.sets);
@@ -168,12 +188,12 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
     }
     else {
       // Read once at initial registration. Invalid or inaccessible host data starts clean.
-      try { this.selectionSession = stateModel.restoreSession(this.params.activity, this.contentData.previousState); }
+      try { this.selectionSession = stateModel.restoreSession(this.params.activity, this.contentData.previousState, this.params.behaviour); }
       catch (error) { this.selectionSession = null; }
-      if (!this.selectionSession) this.selectionSession = sessionModel.createSelectionSession(this.params.activity);
+      if (!this.selectionSession) this.selectionSession = sessionModel.createSelectionSession(this.params.activity, undefined, null, this.params.behaviour.answerMode, this.params.behaviour.typedPenalty, this.params.behaviour.spellingErrorBehaviour, this.params.behaviour.freeSpellingWarnings, this.params.behaviour.enableProgressiveHints);
       this.completionEmitted = this.selectionSession.allSolved;
       this.selectionElements = renderer.renderSelectionControls(document, this.selectionSession, {
-        domId: this.domId, enableCategories: this.params.activity.enableCategories, l10n: this.params.l10n
+        domId: this.domId, enableHints: this.params.behaviour.answerMode === 'typed' && this.params.behaviour.enableProgressiveHints, enableCategories: this.params.activity.enableCategories, l10n: this.params.l10n
       });
       $content[0].appendChild(this.selectionElements.element);
       const {categorySelect, answerSelect} = this.selectionElements;
@@ -189,7 +209,21 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
           this.trigger('resize');
         });
       }
-      answerSelect.addEventListener('change', () => {
+      if (this.params.behaviour.answerMode === 'typed') {
+        answerSelect.addEventListener('input', () => {
+          this.selectionSession.setTypedAnswer(answerSelect.value);
+          this.refreshSelection();
+        });
+        answerSelect.addEventListener('compositionstart', () => { this.answerComposing = true; });
+        answerSelect.addEventListener('compositionend', () => { this.answerComposing = false; });
+        answerSelect.addEventListener('keydown', (event) => {
+          if (event.key !== 'Enter') return;
+          event.preventDefault();
+          if (event.repeat || event.isComposing || event.keyCode === 229 || this.answerComposing) return;
+          this.checkAnswer();
+        });
+      }
+      else answerSelect.addEventListener('change', () => {
         this.selectionSession.selectAnswer(answerSelect.value);
         this.refreshSelection();
       });
@@ -197,6 +231,12 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
         disabled: true, classes: this.domId + '-check',
         'aria-label': buttonText(this.params.l10n.check)
       });
+      if (this.selectionElements.hintStatus) {
+        // Always inert in 3a; unlocking displays a status, never a no-op action.
+        this.addButton('letter-hint', buttonText(this.params.l10n.hint), () => this.requestHint(), true, {
+          disabled: true, classes: this.domId + '-hint', 'aria-label': buttonText(this.params.l10n.hint)
+        });
+      }
       this.addButton('next-set', buttonText(this.params.l10n.next), () => this.nextSet(), true, {
         disabled: true, classes: this.domId + '-next',
         'aria-label': buttonText(this.params.l10n.next)
@@ -249,10 +289,20 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
     this.setView.scroll.setAttribute('aria-describedby', controls.progress.id);
     const state = session.getSetState();
     if (state?.correct) renderer.revealSet(this.setView, this.params.activity.sets[session.displayedSetIndex].word);
-    controls.answerSelect.value = session.selectedAnswerIndex === null ? '' : String(session.selectedAnswerIndex);
-    controls.answerSelect.disabled = Boolean(state?.correct || this.checkFailed);
+    const value = session.answerMode === 'typed' ? state.typedText
+      : session.selectedAnswerIndex === null ? '' : String(session.selectedAnswerIndex);
+    // Avoid resetting the caret during routine input updates.
+    if (controls.answerControl.value !== value) controls.answerControl.value = value;
+    controls.answerControl.disabled = Boolean(state?.correct || this.checkFailed);
     controls.feedback.textContent = this.checkFailed ? this.params.l10n.runtimeError
+      : this.spellingWarningsExhausted() ? this.params.l10n.spellingWarningsExhausted
       : state?.feedback ? this.params.l10n[state.feedback] : '';
+    if (!this.checkFailed && state?.feedback === 'spellingWarning') {
+      const warning = renderer.renderSpellingWarning(controls.feedback.ownerDocument, state.typedText,
+        utilities.decodeEditorText(this.params.activity.sets[session.displayedSetIndex].word), this.params.l10n.spellingWarningAnswer, this.params.a11y.missingLetter);
+      controls.feedback.replaceChildren(warning.element);
+      controls.spellingAnnouncement = warning.announcement;
+    }
     // Refresh/reattachment/category restoration never announces historical feedback.
     controls.announcement.textContent = '';
     controls.sequenceEnd.textContent = session.atSequenceEnd ? this.params.l10n.sequenceEnd : '';
@@ -265,10 +315,59 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
     }
     this.updateCheckButton();
     // Only a user category change to a different Set moves focus; reattachment does not.
-    if (focusAnswer) (state?.correct ? this.setView.scroll : controls.answerSelect).focus();
+    if (focusAnswer) (state?.correct ? this.setView.scroll : controls.answerControl).focus();
+  };
+
+  /** Derived feedback only: no persisted exhaustion flag or changes to checking. */
+  ConcordancesPapiJo.prototype.spellingWarningsExhausted = function () {
+    const session = this.selectionSession, state = session?.getSetState();
+    return Boolean(session?.answerMode === 'typed' && session.spellingPolicy === 'warn' &&
+      session.warningAllowance !== 'unlimited' && state?.feedback === 'incorrect' &&
+      state.warningCount >= session.warningAllowance &&
+      !state.warnedAnswers.includes(utilities.normalizeWord(state.typedText)) &&
+      utilities.isMinorSpellingError(state.typedText,
+        utilities.decodeEditorText(this.params.activity.sets[session.displayedSetIndex].word)));
+  };
+
+  /** Availability and request guards share the session's score/progression model. */
+  ConcordancesPapiJo.prototype.getHintAvailability = function () {
+    return this.checkFailed ? 'hidden' : this.selectionSession?.hintAvailability() ?? 'hidden';
+  };
+
+  ConcordancesPapiJo.prototype.requestHint = function () {
+    if (this.checkFailed || this.checkProcessing || this.retryProcessing || this.navigationProcessing ||
+      !this.selectionSession?.requestHint()) return;
+    this.refreshHintControl();
+    this.selectionElements.answerControl.focus();
+    this.selectionElements.announcement.textContent = this.selectionElements.hintReveal.textContent + ' ' + this.params.l10n.hintDescription;
+    this.trigger('resize');
+  };
+
+  ConcordancesPapiJo.prototype.refreshHintControl = function () {
+    const status = this.selectionElements?.hintStatus;
+    if (!status) return;
+    const availability = this.getHintAvailability();
+    status.className = 'h5p-concordances-papijo-hint-status h5p-concordances-papijo-sr-only';
+    status.hidden = availability === 'hidden';
+    status.textContent = availability === 'hidden' ? '' : availability === 'available' ? this.params.l10n.hintAvailable
+      : this.selectionSession.getSetState().hintCount ? this.params.l10n.hintAfterRequest
+      : this.selectionSession.spellingPolicy === 'warn' && this.selectionSession.warningAllowance !== 'unlimited'
+        ? this.params.l10n.hintLockedWarnings : this.params.l10n.hintLocked;
+    const pattern = this.selectionSession.getHintText();
+    const reveal = this.selectionElements.hintReveal;
+    reveal.hidden = !pattern;
+    reveal.textContent = pattern ? this.params.l10n.hintRevealed.replace(/@hint\b/g, () => pattern) : '';
+    if (this.hintButton) {
+      this.hintButton.disabled = availability !== 'available';
+      this.hintButton.setAttribute('aria-disabled', String(availability !== 'available'));
+      this.hintButton.setAttribute('aria-describedby', status.id);
+    }
+    if (availability !== 'hidden') this.showButton('letter-hint');
+    else this.hideButton('letter-hint');
   };
 
   ConcordancesPapiJo.prototype.updateCheckButton = function () {
+    this.refreshHintControl();
     const disabled = Boolean(this.checkFailed || this.checkProcessing || this.retryProcessing || !this.selectionSession?.canCheck());
     if (this.checkButton) {
       this.checkButton.disabled = disabled;
@@ -296,7 +395,7 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
   /** Internal reset implementation, independent of button availability/focus. */
   ConcordancesPapiJo.prototype._resetAttempt = function () {
     if (!this.selectionSession || !this.selectionElements) return false;
-    const fresh = sessionModel.createSelectionSession(this.params.activity);
+    const fresh = sessionModel.createSelectionSession(this.params.activity, undefined, null, this.params.behaviour.answerMode, this.params.behaviour.typedPenalty, this.params.behaviour.spellingErrorBehaviour, this.params.behaviour.freeSpellingWarnings, this.params.behaviour.enableProgressiveHints);
     this.selectionSession = fresh;
     this.completionEmitted = false;
     this.checkFailed = false;
@@ -306,7 +405,8 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
     this.selectionElements.resultsHost.replaceChildren();
     // Force a blank KWIC view even if the new shuffle starts with the same Set.
     this.displayedSetIndex = null;
-    renderer.populateAnswers(this.selectionElements.answerSelect, fresh.answers, this.params.l10n);
+    this.answerComposing = false;
+    if (fresh.answerMode === 'dropdown') renderer.populateAnswers(this.selectionElements.answerControl, fresh.answers, this.params.l10n);
     this.refreshSelection();
     return true;
   };
@@ -318,7 +418,7 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
     try {
       if (this._resetAttempt()) {
         const controls = this.selectionElements;
-        (controls.categorySelect || controls.answerSelect).focus();
+        (controls.categorySelect || controls.answerControl).focus();
         this.trigger('resize');
       }
     }
@@ -357,10 +457,10 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
       const result = this.selectionSession.checkAnswer();
       if (!result) return;
       this.refreshSelection();
-      const message = result.correct ? this.params.a11y.correctAnswer.replace(/@word\b/g,
+      const message = this.spellingWarningsExhausted() ? this.params.l10n.spellingWarningsExhausted : result.warning ? this.selectionElements.spellingAnnouncement : result.correct ? this.params.a11y.correctAnswer.replace(/@word\b/g,
         () => utilities.decodeEditorText(this.params.activity.sets[this.selectionSession.displayedSetIndex].word))
         : this.params.a11y.incorrectAnswer;
-      (result.correct ? this.setView.scroll : this.selectionElements.answerSelect).focus();
+      (result.correct ? this.setView.scroll : this.selectionElements.answerControl).focus();
       this.selectionElements.announcement.textContent = message + (this.selectionSession.atSequenceEnd
         ? ' ' + this.params.l10n.sequenceEnd : '');
     }
@@ -368,7 +468,7 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
       // Keep unexpected internal failures inert and expose only localized text.
       this.checkFailed = true;
       const controls = this.selectionElements;
-      controls.answerSelect.disabled = true;
+      controls.answerControl.disabled = true;
       controls.feedback.textContent = this.params.l10n.runtimeError;
       this.setView?.scroll.focus();
       controls.announcement.textContent = this.params.l10n.runtimeError;
@@ -409,7 +509,7 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
     return this.params.activity.title || this.params.l10n.placeholderTitle;
   };
 
-  /** H5P Question score contract: integer internal units, not completion. */
+  /** H5P Question score contract: numeric points, not completion. */
   ConcordancesPapiJo.prototype.getScore = function () {
     return this.selectionSession?.getScore() ?? 0;
   };

@@ -32,9 +32,9 @@ function walkFields(fields, inspect) {
   }
 }
 
-test('manifest identifies a runnable standalone activity at version 1.0.0 for Core API 1.28', () => {
+test('manifest identifies a runnable standalone activity at version 1.1.0 for Core API 1.28', () => {
   assert.equal(library.machineName, 'H5P.ConcordancesPapiJo');
-  assert.deepEqual([library.majorVersion, library.minorVersion, library.patchVersion], [1, 0, 0]);
+  assert.deepEqual([library.majorVersion, library.minorVersion, library.patchVersion], [1, 1, 0]);
   assert.deepEqual(library.coreApi, { majorVersion: 1, minorVersion: 28 });
   assert.equal(library.runnable, 1);
   assert.deepEqual(library.embedTypes, ['iframe']);
@@ -43,7 +43,7 @@ test('manifest identifies a runnable standalone activity at version 1.0.0 for Co
     assert.ok(library[key].length > 0);
   }
   assert.match(library.description, /saved-state restoration and xAPI completion/i);
-  assert.equal(packageJson.version, '1.0.0');
+  assert.equal(packageJson.version, '1.1.0');
 });
 
 test('runtime depends only on official Question 1.5 and has no direct Components usage', () => {
@@ -60,7 +60,7 @@ test('runtime depends only on official Question 1.5 and has no direct Components
 test('editor declares VerticalTabs but no unimplemented editor library', () => {
   assert.deepEqual(library.editorDependencies, [
     { machineName: 'H5PEditor.VerticalTabs', majorVersion: 1, minorVersion: 3 },
-    { machineName: 'H5PEditor.ShowWhen', majorVersion: 1, minorVersion: 0 }
+    { machineName: 'H5PEditor.ShowWhenpapijo', majorVersion: 1, minorVersion: 0 }
   ]);
   assert.equal(activity.widget, undefined);
   assert.equal(field(sets.field.fields, 'context').widget, 'textarea');
@@ -79,7 +79,7 @@ test('every declared runtime asset exists and resolves inside this project', () 
 });
 
 test('semantics have valid foundation field types and unique sibling names', () => {
-  const supported = new Set(['text', 'boolean', 'group', 'list']);
+  const supported = new Set(['text', 'boolean', 'group', 'list', 'select']);
   walkFields(semantics, (entry) => {
     assert.ok(supported.has(entry.type), `Unsupported type: ${entry.type}`);
     assert.equal(typeof entry.label, 'string');
@@ -177,11 +177,17 @@ test('manifest loads shared browser validation utilities before the learner shel
   ]);
 });
 
-test('root lifecycle controls are hidden and do not expose speculative authoring settings', () => {
+test('answer mode is visible and defaults to dropdown while lifecycle controls stay hidden', () => {
   const behaviour = field(semantics, 'behaviour');
   assert.equal(behaviour.type, 'group');
-  assert.equal(behaviour.widget, 'none');
-  assert.deepEqual(behaviour.fields.map((entry) => entry.name), ['enableRetry', 'enableSolutionsButton']);
+  assert.equal(behaviour.widget, undefined);
+  assert.deepEqual(behaviour.fields.map((entry) => entry.name), ['setOrder', 'answerMode', 'enableProgressiveHints', 'typedPenalty', 'spellingErrorBehaviour', 'freeSpellingWarnings', 'enableRetry', 'enableSolutionsButton']);
+  const mode = field(behaviour.fields, 'answerMode');
+  assert.equal(mode.type, 'select');
+  assert.equal(mode.default, 'dropdown');
+  assert.deepEqual(mode.options.map(option=>option.value), ['dropdown', 'typed']);
+  for (const name of ['enableRetry', 'enableSolutionsButton']) assert.equal(field(behaviour.fields, name).widget, 'none');
+  assert.match(field(activity.fields, 'distractors').description, /inactive in typed/);
   assert.equal(field(behaviour.fields, 'enableRetry').default, true);
   assert.equal(field(behaviour.fields, 'enableSolutionsButton').default, false);
 });
@@ -202,8 +208,8 @@ test('localization covers learner UI, categories, feedback, results, accessibili
       'selectedCategory', 'start', 'progress', 'answerLabel', 'selectAnswer', 'check', 'next', 'retry',
       'correct', 'incorrect', 'answerRequired', 'resultsTitle', 'totalScore', 'firstAttemptCount',
       'secondAttemptCount', 'laterAttemptCount', 'resultSet', 'resultWord', 'resultAttempts', 'resultPoints',
-      'setLabel', 'invalidContentTitle', 'invalidContentDescription', 'runtimeError', 'sequenceEnd', 'attemptSingular', 'attemptPlural'],
-    a11y: ['missingWord', 'correctAnswer', 'incorrectAnswer', 'kwicRegion', 'contextAlternative'],
+      'setLabel', 'invalidContentTitle', 'invalidContentDescription', 'runtimeError', 'sequenceEnd', 'attemptSingular', 'attemptPlural', 'typedInstruction', 'spellingWarning', 'spellingWarningAnswer', 'spellingWarningsExhausted', 'hint', 'hintLocked', 'hintLockedWarnings', 'hintAvailable', 'hintAfterRequest', 'hintRevealed', 'hintDescription'],
+    a11y: ['missingWord', 'correctAnswer', 'incorrectAnswer', 'kwicRegion', 'contextAlternative', 'missingLetter'],
     validation: ['duplicateWord', 'noSets', 'missingWord', 'missingContext', 'automaticMissingTarget', 'automaticManualGap', 'malformedLancsBox', 'mixedContextFormats', 'ambiguousLancsBox']
   };
   for (const [name, required] of Object.entries(groups)) {
@@ -247,4 +253,39 @@ test('source tree excludes junctions, installed packages and archives outside re
     }
   }
   visit(root);
+});
+
+
+test('typed scoring penalty is conditionally visible with one-point default and preserved hidden value',()=>{
+  const penalty=field(field(semantics,'behaviour').fields,'typedPenalty');
+  assert.equal(penalty.type,'select');assert.equal(penalty.default,'1');
+  assert.deepEqual(penalty.options.map(option=>option.value),['1','0.5']);
+  assert.equal(penalty.widget,'showWhen');assert.deepEqual(penalty.showWhen,{rules:[{field:'answerMode',equals:'typed'}],nullWhenHidden:false});
+});
+
+
+test('spelling policy authoring defaults to mistake and is visible only for typed mode',()=>{
+  const setting=field(field(semantics,'behaviour').fields,'spellingErrorBehaviour');
+  assert.equal(setting.default,'mistake');assert.equal(field(semantics,'l10n').fields.some(item=>item.name==='acceptedSpellingFeedback'),false);assert.deepEqual(setting.options.map(option=>option.value),['mistake','warn']);
+  assert.deepEqual(setting.showWhen,{rules:[{field:'answerMode',equals:'typed'}],nullWhenHidden:false});
+});
+
+
+test('warning allowance editor defaults to two for new and existing content and retains hidden values',()=>{
+  const field=semantics.find(item=>item.name==='behaviour').fields.find(item=>item.name==='freeSpellingWarnings');
+  assert.equal(field.default,'2');assert.deepEqual(field.options.map(item=>item.value),['1','2','3','unlimited']);
+  assert.deepEqual(field.showWhen,{rules:[{field:'answerMode',equals:'typed'},{field:'spellingErrorBehaviour',equals:'warn'}],nullWhenHidden:false,type:'and'});
+  const utils=require('../scripts/concordances-utils.js');
+  assert.equal(utils.resolveWarningAllowance({answerMode:'typed',spellingErrorBehaviour:'warn'}),2);
+  assert.equal(utils.resolveWarningAllowance({answerMode:'typed',spellingErrorBehaviour:'warn',freeSpellingWarnings:'1'}),1);
+  assert.equal(utils.resolveWarningAllowance({answerMode:'dropdown',freeSpellingWarnings:'unlimited'}),1);
+});
+
+
+test('progressive hint author setting defaults disabled and remains typed-only with hidden value preservation',()=>{
+  const setting=field(field(semantics,'behaviour').fields,'enableProgressiveHints');
+  assert.equal(setting.type,'boolean');assert.equal(setting.default,false);
+  assert.equal(setting.description,'Allow learners to request progressive letter hints after making incorrect attempts. Each hint reduces the available score by 0.5 points.');
+  assert.deepEqual(setting.showWhen,{rules:[{field:'answerMode',equals:'typed'}],nullWhenHidden:false});
+  for(const name of ['enableRetry','enableSolutionsButton'])assert.equal(field(field(semantics,'behaviour').fields,name).widget,'none');
 });

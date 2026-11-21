@@ -1,4 +1,9 @@
-# Saved-state schema 1
+# Saved-state schemas 1/2/4/5
+
+This guide describes the accepted Phases 2B/2C local source. User-reported Firefox
+acceptance is complete, including independent installation of the exact 1.1.0
+package. WordPress H5P plugin 1.17.10 uses integer-only My Results handling;
+native/xAPI fractional scores are correct but are not preserved in that host view.
 
 Serialization, validation and Phase 1E-2 restoration are implemented. At initial
 registration, restoreSession validates contentData.previousState and hydrates the
@@ -7,7 +12,126 @@ storage, network or parent API is added. Phase 1H-1 completed reporting
 uses an in-memory guard initialized from the restored solved state; this format
 does not change and restored completed states are not reported again.
 
-## Snapshot
+## Typed schema 2 (local Phase 2A-3)
+
+Dropdown retains the exact schema-1 contract below. Typed mode uses separate strict
+schema-2 records and fingerprints. APIs fingerprint/validateState/restoreSession
+accept a behaviour argument with answerMode typed; omission or explicit dropdown
+selects schema 1. createState infers mode from the session. Mode is never inferred
+from an untrusted snapshot.
+
+Schema 2 has exactly version (2), answerMode (typed), fingerprint, setOrder,
+category, locked, position, sets and results. There is no answerOrder or persisted
+score. Each Set tuple is:
+
+~~~text
+[id, rawTypedText, attempts, solved, checked, lastSubmittedNormalizedKeyOrNull]
+~~~
+
+Raw text is preserved, not HTML-decoded; markup-looking strings are safe plain
+text. checked represents visible submitted feedback. The retained last submitted
+key also blocks equivalent resubmission after editing away and back, even when
+checked is false. Solved rows must match the once-decoded authored target under
+NFC/trim/lowercase rules. Newline values are rejected because a native single-line
+input cannot preserve them; there is no arbitrary length cap or markup ban.
+
+Typed canonical fingerprint input is [2, typed, categoriesEnabled, sortedSetRecords,
+[automatic-gaps, interpretation]], hashed with the unchanged cpj1 algorithm.
+Interpretation remains 1 for ordinary, 3 when any Set is tabular. Records retain
+raw Word/Context/category and raw normalized identities. Distractors are excluded
+and never read for typed compatibility. Relevant authored edits or a mode change
+reject incompatible snapshots. Schema 1 canonical input remains unchanged.
+
+Restore validates exact data shapes, category/Set identity/order, attempts,
+submitted-key consistency, solved/checked state, pristine future/ineligible Sets,
+lock and results. Only fully valid independent data hydrates the session, without
+shuffle draws, auto-checks, focus stealing or live announcements. Scores/results
+are derived and completed restoration initializes the existing completion guard.
+See [the checkpoint report](typed-state-checkpoint.md).
+
+## Configurable typed scoring (local Phase 2B-1)
+
+Schema-2 fields/tuple validation and derived-score storage rules are unchanged.
+Missing/explicit one-point penalty keep the earlier typed canonical payload
+exactly. Only half-point scoring appends [typed-penalty, 0.5] after the existing
+interpretation marker, before cpj1 hashing. Changing penalty rejects incompatible
+attempts; inactive dropdown penalty values do not affect schema 1 or its hash.
+Typed state creation uses the session's effective penalty; validation, restoration
+and fresh/Retry sessions use the resolved Behaviour setting. No stored score,
+penalty field, migration or schema bump is introduced. Scores are re-derived from
+attempts with the compatible rule. Completed restoration stays quiet.
+
+## Configurable Warn policy: schema 4 (Phase 2B-2f)
+
+Warn activities use schema 4 for every allowance: 1, 2, 3 or the string unlimited.
+Missing/unsupported values default to 2 when typed/Warn is active. Dropdown and
+strict policy ignore the allowance. No creation hook or old-content distinction.
+
+The root extends the prior typed fields with spellingPolicy=warn and warningAllowance.
+Each row contains:
+
+~~~text
+[id, rawTypedText, scoredAttempts, solved, checked, lastSubmissionKey,
+ warningCount, warningActive, warnedNormalizedAnswers]
+~~~
+
+The count is a nonnegative safe integer, finite counts cannot exceed the allowance,
+and warnedNormalizedAnswers is a dense, unique list of eligible minor spelling
+answers whose length equals the count. It prevents reusing a warned answer after
+editing away and back, including Unlimited. Counts/history reset only on Retry.
+Feedback requires a valid last warned answer; unscored submitted states must be
+explained by warning use. Scores remain derived. Ineligible/future rows remain
+pristine and category locking reflects warning use or scored attempts.
+
+The typed fingerprint includes [free-spelling-warnings, effectiveAllowance] after
+the Warn marker, so cross-allowance snapshots cannot restore. Schema-3/intermediate
+Warn states are rejected rather than migrated. Strict typed schema 2 and dropdown
+schema 1 retain their current formats; no special compatibility code for obsolete
+spelling configurations is retained. Highlighted feedback reconstructs from raw
+text quietly, with no schema changes to presentation or missing-letter markers.
+See the [checkpoint report](warning-allowance-checkpoint.md).
+
+## Adaptive progressive hints: schema 5 (Phase 2B-3b)
+
+Typed mode with enableProgressiveHints=true wraps the unchanged schema-2 or
+schema-4 base state in exactly version=5, fingerprint, baseState and hints.
+The wrapper fingerprint hashes [5, baseFingerprint, 'adaptive-letter-hints', 1]
+using the existing cpj1 algorithm. Each hints entry is [Set identity, history];
+each request history row is [scoredIncorrectAttempts,
+totalIncorrectAndWarningSubmissions, matchedPrefixLetters, revealedLetters].
+Hint count and cost derive from history; no score is stored.
+
+Validation first checks the complete base state, then unique Set identities,
+history bounds, first unlock, monotonic submissions/warnings/revelation, improved
+prefix at positive points or a new scored submission at zero, the positive-score
+full-answer cap and consistency with the latest known checked prefix. Future and
+ineligible Sets cannot have hints. Malformed or obsolete development hint states
+start fresh without migration. Restoration reconstructs hint text and availability
+without new deductions, focus movement, announcements or completion events.
+Hint-disabled activities retain schemas 1/2/4. See the
+[adaptive hint contract](progressive-letter-hints-checkpoint.md).
+
+## Configurable Set order (Phase 2C)
+
+The editor stores behaviour.setOrder: shuffle (default) or author. The runtime
+normalizes a valid behaviour value into its internal activity.setOrder path,
+falling back to the legacy activity value. Missing settings retain Shuffle.
+The internal state helpers consume that normalized activity; they do not perform
+the editor-path bridge independently.
+
+Missing/explicit Shuffle preserve their existing fingerprint payloads. Author
+mode appends ['set-order', 'author'] to the base canonical payload before hashing;
+the schema-5 wrapper consequently incorporates it through the base fingerprint.
+Changing ordering policy rejects incompatible state. Schemas and the hash
+algorithm are unchanged, with no migration.
+
+Editor Set order itself remains excluded: an accepted saved run restores its full
+saved permutation after authored reordering in either mode. Category eligibility
+is unchanged. Retry clears the run and returns to All categories, using fresh
+Shuffle draws or current editor order as selected. See the
+[Set order contract](set-order-checkpoint.md).
+
+## Schema-1 snapshot
 
 After valid session initialization, `getCurrentState()` returns independent plain
 JSON data. Before first attachment or for invalid content it returns `{}`, which
@@ -81,7 +205,8 @@ their exact attempt-relevant content remain unchanged. Saved orders retain the
 learner's prepared permutations. The first displayed spelling/order of category
 labels may change on author reordering; category membership and identity do not.
 
-The fingerprint hashes canonical JSON of this fixed positional structure:
+The schema-1 Shuffle fingerprint hashes canonical JSON of this structure (author
+mode appends the marker described above):
 
 ```text
 [1, categoriesEnabled, rawDistractors, sortedSetRecords, interpretation]
@@ -99,8 +224,9 @@ would yield equivalent choices. Set additions/removals and category enablement
 also invalidate it. Non-string categories become null, and non-string distractors
 become an empty string, matching the runtime's treatment of those ignored values.
 
-Title, introduction, localization and behaviour settings are excluded: they do
-not change Set identity, content, eligibility, ordering, checking or score units.
+Title, introduction and localization are excluded. Inactive typed settings do
+not affect dropdown fingerprints. Active answer mode, typed penalty, spelling
+policy/allowance, hints and Set order follow their compatibility rules above.
 The raw input fields include everything needed to detect changed deduplication
 winners and answer display spellings, without saving those authored strings twice.
 
@@ -146,8 +272,9 @@ never repairs, partially applies or automatically migrates a state.
 Snapshots reflect category/provisional choices, wrong Check, changed unchecked
 input, correct Check, Next and final results. Retry creates fresh tuples and
 orders with the same content fingerprint, All categories, position zero,
-unlocked state and no results. Orders can match by chance; they are still freshly
-prepared. Calling the serializer/validator never shuffles, checks or scores input.
+unlocked state and no results. Shuffle orders can match by chance; author mode
+uses current editor order. Calling the serializer/validator never shuffles,
+checks or scores input.
 
 Phase 1E-2 maps identities to current indices/labels and hydrates session state,
 then reuses the renderer for feedback/revelation/results. See the

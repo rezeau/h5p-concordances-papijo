@@ -94,6 +94,7 @@ strong.h5p-concordances-papijo-revealed-word {
   font-weight: bold;
 }
 
+.h5p-concordances-papijo-input,
 .h5p-concordances-papijo-select {
   box-sizing: border-box;
   min-width: 0;
@@ -108,6 +109,7 @@ strong.h5p-concordances-papijo-revealed-word {
   border-radius: var(--h5p-theme-border-radius-medium, 0.5rem);
 }
 
+.h5p-concordances-papijo-input:focus,
 .h5p-concordances-papijo-select:focus {
   outline: 3px solid var(--h5p-theme-focus, #006fbf);
   outline-offset: 2px;
@@ -143,3 +145,14 @@ strong.h5p-concordances-papijo-revealed-word {
   grid-column: 1 / -1;
   min-height: 1.5em;
 }
+
+.h5p-concordances-papijo-spelling-line { display: block; }
+.h5p-concordances-papijo-spelling-answer { white-space: pre-wrap; }
+.h5p-concordances-papijo-spelling-error {
+  font-weight: bold;
+  text-decoration: underline dashed;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.15em;
+  color: var(--h5p-theme-feedback-incorrect-main, #a13236);
+}
+/* Omission underscores share the theme-aware spelling-error treatment. */

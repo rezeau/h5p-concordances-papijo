@@ -390,3 +390,97 @@ test('session preparation leaves frozen authored data and Context exactly unchan
   assert.deepEqual(session.eligibleSetIndices, [0]);
   assert.equal(Object.isFrozen(session.answers), true);
 });
+
+
+test('typed normalization accepts NFC/case/trim only, preserves accents and decodes authored escapes once', () => {
+  for (const [word,answer,correct] of [
+    ['fresco',' fresco ',true],['fresco','Fresco',true],['fresco','frescoes',false],['fresco','frescoed',false],
+    ['fresco','mosaic',false],['éternel','E\u0301TERNEL',true],['éternel','eternel',false],
+    ['can&#039;t',"CAN'T",true],['can&#039;t','can&#039;t',false],
+    ['&amp;quot;','&amp;quot;',true],['&amp;quot;','&quot;',false]
+  ]) {
+    const session=model.createSelectionSession({sets:[{word,context:word}]},()=>0,null,'typed');
+    session.setTypedAnswer(answer);
+    assert.equal(session.getSetState().typedText,answer);
+    assert.equal(session.checkAnswer().correct,correct);
+  }
+});
+
+test('typed checking ignores inactive distractors and pool shuffles, gates normalized resubmission and scores 2/1/0', () => {
+  for (const wrongCount of [0,1,2,3]) {
+    const source={sets:[{word:'fresco',context:'fresco'}]};
+    Object.defineProperty(source,'distractors',{get(){throw new Error('Inactive distractors accessed');}});
+    const session=model.createSelectionSession(source,()=>{throw new Error('Unexpected pool shuffle');},null,'typed');
+    assert.deepEqual(session.answers,[]);
+    for(const blank of ['', ' \t ']) {session.setTypedAnswer(blank);assert.equal(session.canCheck(),false);assert.equal(session.checkAnswer(),null);}
+    for(let index=0;index<wrongCount;index++) {
+      const wrong='wrong'+index;session.setTypedAnswer(wrong);
+      assert.equal(session.checkAnswer().correct,false);
+      session.setTypedAnswer(' '+wrong.toUpperCase()+' ');
+      assert.equal(session.canCheck(),false);assert.equal(session.checkAnswer(),null);
+      session.setTypedAnswer('different');assert.equal(session.canCheck(),true);
+      session.setTypedAnswer(wrong);assert.equal(session.canCheck(),false);
+    }
+    session.setTypedAnswer('FRESCO');assert.equal(session.getSetState().attempts,wrongCount);
+    assert.equal(session.checkAnswer().correct,true);
+    assert.equal(session.getScore(),Math.max(0,2-wrongCount));assert.equal(session.getMaxScore(),2);
+    assert.equal(session.getResults()[0].attempts,wrongCount+1);
+    assert.equal(session.checkAnswer(),null);
+  }
+});
+
+
+test('typed scoring penalty yields exact half points, clamps at zero and preserves submission gating',()=>{
+  for(const [penalty,expected] of [[1,[2,1,0,0,0,0]],[0.5,[2,1.5,1,0.5,0,0]]]){
+    for(let wrongs=0;wrongs<expected.length;wrongs++){
+      const session=model.createSelectionSession({sets:[{word:'One',context:'ONE'}]},keepOrder,null,'typed',penalty);
+      for(let index=0;index<wrongs;index++){
+        session.setTypedAnswer('wrong'+index);session.checkAnswer();
+        session.setTypedAnswer(' WRONG'+index+' ');assert.equal(session.canCheck(),false);assert.equal(session.checkAnswer(),null);
+      }
+      session.setTypedAnswer('One');assert.equal(session.getSetState().attempts,wrongs);
+      session.checkAnswer();assert.equal(session.getScore(),expected[wrongs]);assert.equal(session.getResults()[0].units,expected[wrongs]);assert.equal(session.getMaxScore(),2);
+    }
+  }
+  const dropdown=model.createSelectionSession({distractors:'Wrong',sets:[{word:'One',context:'ONE'}]},keepOrder,null,'dropdown',0.5);
+  dropdown.selectAnswer(String(dropdown.answers.indexOf('Wrong')));dropdown.checkAnswer();dropdown.selectAnswer(String(dropdown.answers.indexOf('One')));dropdown.checkAnswer();assert.equal(dropdown.getScore(),1);
+});
+
+
+test('spelling policies distinguish free warnings from scored attempts for both penalties',()=>{
+  const activity={sets:[{word:'fresco',context:'frescoes'}]};
+  for(const penalty of [1,0.5])for(const policy of ['mistake','warn']){
+    const session=model.createSelectionSession(activity,keepOrder,null,'typed',penalty,policy,1);
+    session.setTypedAnswer('fresoc');assert.equal(session.getSetState().attempts,0);
+    const result=session.checkAnswer();assert.equal(result.correct,false);
+    assert.equal(session.getSetState().typedText,'fresoc');
+    if(policy==='warn'){
+      assert.equal(result.warning,true);assert.equal(session.getSetState().attempts,0);assert.equal(session.getSetState().warningCount > 0,true);
+      session.setTypedAnswer(' FRESOC ');assert.equal(session.canCheck(),false);assert.equal(session.checkAnswer(),null);
+      session.setTypedAnswer('fresco');session.checkAnswer();assert.equal(session.getScore(),2);
+    }else{assert.equal(session.getSetState().attempts,1);session.setTypedAnswer('fresco');session.checkAnswer();assert.equal(session.getScore(),2-penalty);}
+    const warn=model.createSelectionSession(activity,keepOrder,null,'typed',penalty,'warn',1);
+    warn.setTypedAnswer('unrelated');warn.checkAnswer();warn.setTypedAnswer('fresoc');warn.checkAnswer();assert.equal(warn.getSetState().attempts,1);
+    warn.setTypedAnswer('frescp');assert.equal(warn.checkAnswer().correct,false);assert.equal(warn.getSetState().attempts,2);assert.equal(warn.getSetState().feedback,'incorrect');
+    warn.setTypedAnswer('fresco');warn.checkAnswer();assert.equal(warn.getScore(),Math.max(0,2-penalty*2));
+  }
+});
+
+
+test('warning allowances count distinct free submissions, preserve earlier attempts and exhaust under both penalties',()=>{
+  const typos=['fresoc','frescp','frescoo','fresc','ffresco','fresko'];
+  for(const allowance of [1,2,3,'unlimited'])for(const penalty of [1,0.5]){
+    const session=model.createSelectionSession({sets:[{word:'fresco',context:'FRESCOes'}]},keepOrder,null,'typed',penalty,'warn',allowance);
+    session.setTypedAnswer('unrelated');session.checkAnswer();
+    for(let index=0;index<typos.length;index++){
+      session.setTypedAnswer(typos[index]);const result=session.checkAnswer();
+      assert.equal(result.warning===true,allowance==='unlimited'||index<allowance);
+      session.setTypedAnswer(' '+typos[index].toUpperCase()+' ');assert.equal(session.canCheck(),false);assert.equal(session.checkAnswer(),null);
+    }
+    assert.equal(session.getSetState().warningCount,allowance==='unlimited'?6:allowance);
+    assert.equal(session.getSetState().attempts,1+(allowance==='unlimited'?0:6-allowance));
+    if(allowance!==1){session.setTypedAnswer(typos[0]);assert.equal(session.canCheck(),false);}
+    session.setTypedAnswer('fresco');session.checkAnswer();
+    assert.equal(session.getScore(),Math.max(0,2-penalty*(1+(allowance==='unlimited'?0:6-allowance))));assert.equal(session.getMaxScore(),2);
+  }
+});
