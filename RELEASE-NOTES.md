@@ -1,3 +1,26 @@
+# H5P.ConcordancesPapiJo 1.1.2 — release candidate
+
+Requires H5P Core API 1.28 and a modern browser with Intl.Segmenter support.
+
+- Automatic KWIC alignment for clearly ordinary sentences, anchored at the first
+  keyword match per line using the existing LancsBox layout.
+- Preserved LancsBox NODE alignment and numbered/preformatted Multiconc layout,
+  including suffix adjacency, punctuation, capitalization and Unicode revelation.
+- Approved vector KWIC speech-bubble library icon.
+- Root `.h5pignore` excludes development and historical material from CLI packages.
+- Retains published 1.1.1 parent task, completion and reset improvements.
+
+No changes to authoring semantics, matching, scoring, hints, saved state or xAPI.
+Presentation classification is conservative; text without distinguishing format
+signals is treated as ordinary input. Existing compatibility qualifications remain.
+
+User-reported Firefox CLI and WordPress acceptance passed all three KWIC formats.
+Standard CLI packaging/installation and WordPress icon display passed. These
+checks were completed before candidate preparation and were not repeated.
+Published releases and tags are unchanged; this candidate has not been published.
+
+---
+
 # H5P.ConcordancesPapiJo 1.1.1
 
 Requires H5P Core API 1.28 and a modern browser with Intl.Segmenter support.

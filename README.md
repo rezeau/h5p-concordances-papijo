@@ -2,9 +2,11 @@
 
 A standalone H5P concordance activity. Authors paste lines containing a target
 Word; learners identify the automatically hidden word using a dropdown or typed input.
-Source declarations are **1.1.1**, requiring **H5P Core API 1.28**.
-The current published release is 1.1.0. Version 1.1.1 adds parent task,
-completion and reset compatibility; see the [release notes](RELEASE-NOTES.md).
+Source declarations are **1.1.2**, requiring **H5P Core API 1.28**.
+The current published release is 1.1.1. Version 1.1.2 is a release candidate
+adding automatic ordinary-sentence KWIC alignment, the KWIC library icon and
+clean CLI packaging while retaining 1.1.1 parent integration; see the
+[release notes](RELEASE-NOTES.md).
 The accepted 1.1.0 package is documented in the
 [1.1.0 release record](docs/release-1.1.0.md).
 
@@ -29,8 +31,8 @@ not invalidate typed attempts. Completed restoration does not replay xAPI comple
 Phases 2B and 2C have passed user-reported local Firefox acceptance, including
 Set order placement in Behavioural settings. The exact 1.1.0 package has also
 passed independent WordPress installation and Firefox acceptance. This does not
-establish fractional My Results support. Source declarations are now 1.1.1;
-the published 1.1.0 package remains unchanged. See the
+establish fractional My Results support. Source declarations are now 1.1.2;
+the published 1.1.0 and 1.1.1 packages remain unchanged. See the
 [restoration checkpoint report](docs/typed-state-checkpoint.md).
 
 Typed mode also offers **Points deducted per incorrect attempt**: 1 (default)
@@ -191,6 +193,19 @@ reading alternatives. Native labelled selects, standard Question buttons, theme
 colors and focus behavior are retained. One polite atomic region announces Check
 feedback; restored feedback/results do not replay announcements.
 
+Version 1.1.2 aligns clearly ordinary sentences at each line's first keyword
+match using the existing LancsBox shared tracks. Numbered Multiconc and contexts
+with preformatted spacing retain their existing presentation; LancsBox keeps its
+NODE anchor. Keyword suffixes and punctuation remain inline, including after
+revelation. Matching, authoring data, scoring, hints, saved state and xAPI are unchanged.
+Ambiguous preformatted content is conservatively left unaligned; unmarked text
+identical to ordinary sentences cannot be distinguished by origin.
+
+The root KWIC speech-bubble icon is included by the release builder. Root
+`.h5pignore` permits runtime/editor assets and the icon for standard CLI packing,
+excluding development and historical release directories. Keep development files
+out of the permitted scripts and styles directories.
+
 Authored text uses text nodes. The existing display conversion reverses only
 &quot;, &#039;, &lt; and &gt; once; ampersands are not recursively decoded. Word/Context
 raw values and identities stay unchanged. Literal entity spelling cannot always
@@ -204,7 +219,13 @@ Papi Jo author metadata are retained.
 
 ## Installation and verification
 
-The accepted 1.1.0 archive is prepared for GitHub publication; its exact filename,
+Published 1.1.0 and 1.1.1 artifacts and tags are preserved. The 1.1.2 candidate is
+prepared separately and has not been published. User-reported Firefox CLI and
+WordPress acceptance passed all three KWIC formats; standard CLI packaging and
+installation passed, and the icon was approved and displayed in WordPress.
+These completed checks were not repeated for candidate preparation.
+
+The accepted 1.1.0 archive's exact filename,
 hash and installation qualifications are in the [release record](docs/release-1.1.0.md).
 The historical published package remains available as
 [H5P.ConcordancesPapiJo-1.0.0.h5p](https://github.com/rezeau/h5p-concordances-papijo/releases/download/v1.0.0/H5P.ConcordancesPapiJo-1.0.0.h5p).
@@ -224,7 +245,7 @@ official H5P package validator returned true with no errors. No new browser auto
 Independent WordPress/Firefox acceptance was subsequently completed by the user.
 The upstream icon-asset qualification remains documented.
 
-For the accepted 1.1.0 package and proposed publication, see the
+For the historical accepted 1.1.0 package, see the
 [release record](docs/release-1.1.0.md); the earlier
 [release preparation](docs/release-1.1.0-preparation.md) remains historical. Optional learner Hint
 Help (?) and the official ShowWhen/ShowWhenpapijo shared-global collision remain

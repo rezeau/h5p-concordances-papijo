@@ -91,6 +91,85 @@ test('all ten fresco rows retain NODE alignment, suffixes, natural accessible or
 });
 
 
+test('plain cat sentences reuse shared tracks and retain inline suffixes and source data', () => {
+  const context = 'There is a black cat sitting on the red mat.\n' +
+    'Let me tell you the story of a nice white cat in the garden.\nToo many cats spoil the house.';
+  const set = Object.freeze({word:'cat', context});
+  const view = renderer.renderSet(createDocument(), set, options);
+  const cells = (name) => findAll(view.pre, node => node.className === 'h5p-concordances-papijo-kwic-' + name);
+  assert.ok(view.pre.className.includes('h5p-concordances-papijo-tabular'));
+  assert.deepEqual(cells('left').map(node => node.textContent),
+    ['There is a black ', 'Let me tell you the story of a nice white ', 'Too many ']);
+  assert.deepEqual(cells('primary').map(node => node.textContent), ['_____', '_____', '_____']);
+  assert.equal(cells('right')[2].textContent, 's spoil the house.');
+  cells('continuation').forEach((node, index) => {
+    assert.deepEqual(node.children, [cells('primary')[index], cells('right')[index]]);
+    assert.equal(node.childNodes.length, 2);
+  });
+  assert.equal(cells('continuation')[2].textContent, '_____s spoil the house.');
+  assert.deepEqual(findAll(view.pre, node => node.className === 'h5p-concordances-papijo-gap'), view.gapNodes);
+  assert.deepEqual(view.accessibleLines.map(node => node.textContent), context.replace(/cat/g, 'missing word').split('\n'));
+  assert.equal(view.scroll.tabIndex, 0);
+  assert.equal(view.scroll.getAttribute('role'), 'region');
+  assert.equal(view.pre.getAttribute('aria-hidden'), 'true');
+  renderer.revealSet(view);
+  renderer.revealSet(view);
+  assert.equal(view.pre.textContent, context);
+  assert.equal(cells('continuation')[2].textContent, 'cats spoil the house.');
+  assert.deepEqual(view.accessibleLines.map(node => node.textContent), context.split('\n'));
+  assert.deepEqual(set, {word:'cat', context});
+});
+
+test('whole-context preservation protects numbered, spaced, tabbed and mixed preformatted lines', () => {
+  for (const context of [
+    '[001] ABSTRACTions and semi-\n[002] semi-ABSTRACTions by Everett McNear\n[003] quite ABSTRACT. In France',
+    '  ABSTRACTions\r\nABSTRACT.',
+    'An ABSTRACT  example.\nAnother ABSTRACT.',
+    'An ABSTRACT\tcontinues.\nAnother ABSTRACT.',
+    'An ABSTRACT.\n[002] Another ABSTRACT.',
+    '[001]ABSTRACTions\n[002]ABSTRACT.',
+    '1. ABSTRACTions\n2) ABSTRACT.',
+    'An ABSTRACT. \nAnother ABSTRACT.',
+    'An\u00a0ABSTRACT.\nAnother ABSTRACT.'
+  ]) {
+    const set = Object.freeze({word:'abstract', context});
+    const view = renderer.renderSet(createDocument(), set, options);
+    assert.equal(view.pre.className, 'h5p-concordances-papijo-context');
+    assert.equal(findAll(view.pre, node => node.className === 'h5p-concordances-papijo-kwic-row').length, 0);
+    assert.equal(view.pre.textContent, context.replace(/ABSTRACT/g, '_____'));
+    const surrounding = view.pre.childNodes.filter(node => node.nodeType === 3);
+    renderer.revealSet(view);
+    assert.equal(view.pre.textContent, context);
+    assert.deepEqual(view.pre.childNodes.filter(node => node.nodeType === 3), surrounding);
+    assert.deepEqual(view.accessibleLines.map(node => node.textContent), context.split(/\r\n|\r|\n/));
+    assert.equal(set.context, context);
+  }
+});
+
+test('plain first-gap anchoring preserves later matches, Unicode, blank lines and all line endings', () => {
+  const context = '\r\nAn E\u0301TERNELlement, ÉTERNEL!\r\n\rPuis éternel.\n';
+  const set = Object.freeze({word:'éternel', context});
+  const view = renderer.renderSet(createDocument(), set, options);
+  const primary = findAll(view.pre, node => node.className === 'h5p-concordances-papijo-kwic-primary');
+  const right = findAll(view.pre, node => node.className === 'h5p-concordances-papijo-kwic-right');
+  assert.ok(view.pre.className.includes('h5p-concordances-papijo-tabular'));
+  assert.equal(primary.length, 2);
+  assert.equal(view.gapNodes.length, 3);
+  assert.equal(primary[0].children[0], view.gapNodes[0]);
+  assert.equal(primary[1].children[0], view.gapNodes[2]);
+  assert.equal(right[0].textContent, 'lement, _____!');
+  assert.deepEqual(findAll(view.pre, node => node.className === 'h5p-concordances-papijo-gap'), view.gapNodes);
+  assert.equal(findAll(view.pre, node => node.className === 'h5p-concordances-papijo-kwic-unanchored').length, 3);
+  assert.equal(view.pre.textContent, '\r\nAn _____lement, _____!\r\n\rPuis _____.\n');
+  assert.deepEqual(view.accessibleLines.map(node => node.textContent), ['', 'An missing wordlement, missing word!', '', 'Puis missing word.', '']);
+  renderer.revealSet(view);
+  assert.equal(view.pre.textContent, context);
+  assert.deepEqual(findAll(view.pre, node => node.tagName === 'STRONG').map(node => node.textContent),
+    ['E\u0301TERNEL', 'ÉTERNEL', 'éternel']);
+  assert.deepEqual(view.accessibleLines.map(node => node.textContent), context.split(/\r\n|\r|\n/));
+  assert.deepEqual(set, {word:'éternel', context});
+});
+
 test('spelling feedback highlights code-point edits without changing source text or revealing omissions',()=>{
   for(const [answer,target,highlight,before,omission] of [
     ['frescp','fresco','p','fresc',false],['frescco','fresco','c','fresc',false],

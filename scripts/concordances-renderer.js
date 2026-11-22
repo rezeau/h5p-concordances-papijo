@@ -21,6 +21,13 @@
     return node;
   }
 
+  /** Presentation only: ambiguous/preformatted input keeps its original pre layout. */
+  function isPlainContext(context) {
+    if (/[^\S\r\n ]/.test(context)) return false;
+    return context.split(/\r\n|\r|\n/).every((line) => !line ||
+      !(/^ | $| {2,}|^\[\d+\]|^\d+[.)](?:\s|$)/.test(line)));
+  }
+
   /**
    * Render one validated Set. Corpus strings are never parsed as HTML; editor escapes are handled only in the display copy.
    * Original tokens also provide lossless replacement points after a correct Check.
@@ -73,10 +80,11 @@
         else lineTokens[lineTokens.length - 1].push({...token, text: part});
       });
     });
-    // Grid tracks share a keyword column; positions come from NODE, not
-    // from the first matching occurrence in the reconstructed sentence.
+    // Keep LancsBox NODE anchors; only clearly plain contexts use the first gap.
+    // Classification is for the whole display copy, never stored authoring data.
     const normalized = utilities.normalizeConcordance(context);
-    if (normalized.format === 'lancsbox') {
+    const lancsbox = normalized.format === 'lancsbox';
+    if (lancsbox || isPlainContext(context)) {
       pre.className += ' h5p-concordances-papijo-tabular';
       const gapElements = new Map(tokens.filter((token) => token.type === 'gap')
         .map((token, index) => [token, gapNodes[index]]));
@@ -85,8 +93,10 @@
         const metadata = normalized.lines[index];
         let length = 0, anchor = null;
         line.forEach((token) => {
-          if (!anchor && metadata && token.type === 'gap' && length >= metadata.keywordStart &&
-            length + token.text.length <= metadata.keywordEnd) anchor = {start: length, end: length + token.text.length};
+          if (!anchor && token.type === 'gap' && (!lancsbox || (metadata &&
+            length >= metadata.keywordStart && length + token.text.length <= metadata.keywordEnd))) {
+            anchor = {start: length, end: length + token.text.length};
+          }
           length += token.text.length;
         });
         const row = element(document, 'span', 'h5p-concordances-papijo-kwic-row');
