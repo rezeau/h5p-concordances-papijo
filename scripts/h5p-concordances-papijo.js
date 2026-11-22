@@ -100,6 +100,7 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
 
     this.contentId = contentId;
     this.contentData = isRecord(contentData) ? contentData : {};
+    this.isTask = true;
     this.params = {
       ...source,
       activity: {
@@ -411,7 +412,16 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
     return true;
   };
 
-  /** Standalone activation only; no parent resetTask contract is exposed. */
+  /** Parent reset is independent of learner Retry availability and does not move focus. */
+  ConcordancesPapiJo.prototype.resetTask = function () {
+    if (!this.domRegistered) {
+      this.contentData = {...this.contentData, previousState: {}};
+      return;
+    }
+    if (this._resetAttempt()) this.trigger('resize');
+  };
+
+  /** Learner Retry also restores focus to the activity controls. */
   ConcordancesPapiJo.prototype.retry = function () {
     if (!this.canRetry()) return;
     this.retryProcessing = true;
@@ -518,9 +528,9 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
     return this.selectionSession?.getMaxScore() ?? 0;
   };
 
-  /** Container answer-given contract remains deferred; standalone completion uses xAPI. */
+  /** The selected-category activity is answered only once final results are available. */
   ConcordancesPapiJo.prototype.getAnswerGiven = function () {
-    return false;
+    return Boolean(this.selectionSession?.allSolved && this.resultsView);
   };
 
   /** Serialize the current live attempt, including restored interaction state. */

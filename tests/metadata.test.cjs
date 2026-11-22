@@ -32,9 +32,9 @@ function walkFields(fields, inspect) {
   }
 }
 
-test('manifest identifies a runnable standalone activity at version 1.1.0 for Core API 1.28', () => {
+test('manifest identifies a runnable standalone activity at version 1.1.1 for Core API 1.28', () => {
   assert.equal(library.machineName, 'H5P.ConcordancesPapiJo');
-  assert.deepEqual([library.majorVersion, library.minorVersion, library.patchVersion], [1, 1, 0]);
+  assert.deepEqual([library.majorVersion, library.minorVersion, library.patchVersion], [1, 1, 1]);
   assert.deepEqual(library.coreApi, { majorVersion: 1, minorVersion: 28 });
   assert.equal(library.runnable, 1);
   assert.deepEqual(library.embedTypes, ['iframe']);
@@ -43,7 +43,7 @@ test('manifest identifies a runnable standalone activity at version 1.1.0 for Co
     assert.ok(library[key].length > 0);
   }
   assert.match(library.description, /saved-state restoration and xAPI completion/i);
-  assert.equal(packageJson.version, '1.1.0');
+  assert.equal(packageJson.version, '1.1.1');
 });
 
 test('runtime depends only on official Question 1.5 and has no direct Components usage', () => {

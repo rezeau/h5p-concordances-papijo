@@ -130,6 +130,128 @@ async function solveAttempt(instance) {
 
 const completedStatements = (instance) => instance.events.filter(event=>event.name==='xAPI').map(event=>event.data.statement);
 
+test('parent compatibility: selected-category completion and restoration are independent of score', () => {
+  for (const wrongs of [0, 1, 2]) {
+    const {Constructor} = createHarness();
+    const params = {activity: {enableCategories: true, distractors: 'Wrong A\nWrong B', sets: [
+      {word: 'One', context: 'ONE', category: 'A'},
+      {word: 'Two', context: 'TWO', category: 'B'}
+    ]}};
+    const instance = new Constructor(params, 42);
+    assert.equal(Object.hasOwn(instance, 'isTask'), true);
+    assert.equal(instance.isTask, true);
+    assert.equal(instance.getAnswerGiven(), false);
+    instance.attach();
+    assert.equal(instance.getAnswerGiven(), false);
+    const category = instance.selectionSession.categories.find(entry => entry.key === 'a');
+    instance.selectionElements.categorySelect.value = category.id;
+    instance.selectionElements.categorySelect.dispatchEvent({type: 'change'});
+    for (let n = 0; n < wrongs; n++) submitWord(instance, ['Wrong A', 'Wrong B'][n]);
+    assert.equal(instance.getAnswerGiven(), false);
+    const unfinished = new Constructor(params, 42, {previousState: JSON.parse(JSON.stringify(instance.getCurrentState()))});
+    unfinished.attach();
+    assert.equal(unfinished.getAnswerGiven(), false);
+    assert.equal(completedStatements(unfinished).length, 0);
+
+    submitWord(instance, 'One');
+    assert.equal(instance.getAnswerGiven(), true);
+    assert.equal(instance.getScore(), 2 - wrongs);
+    assert.equal(instance.getMaxScore(), 2);
+    assert.equal(instance.selectionSession.getSetState(1).correct, false);
+    assert.equal(completedStatements(instance).length, 1);
+    const restored = new Constructor(params, 42, {previousState: JSON.parse(JSON.stringify(instance.getCurrentState()))});
+    assert.equal(restored.getAnswerGiven(), false);
+    restored.attach();
+    restored.attach();
+    restored.refreshSelection();
+    restored.checkAnswer();
+    assert.equal(restored.getAnswerGiven(), true);
+    assert.equal(restored.getScore(), 2 - wrongs);
+    assert.equal(completedStatements(restored).length, 0);
+  }
+});
+
+test('parent compatibility: learner Retry clears completion and permits one new completion event', () => {
+  const {Constructor} = createHarness();
+  const instance = new Constructor({activity: {sets: [{word: 'One', context: 'ONE'}]}});
+  instance.attach();
+  submitWord(instance, 'One');
+  assert.equal(instance.getAnswerGiven(), true);
+  instance.retry();
+  assert.equal(instance.getAnswerGiven(), false);
+  assert.equal(instance.getScore(), 0);
+  assert.equal(instance.resultsView, null);
+  submitWord(instance, 'One');
+  instance.checkAnswer();
+  instance.refreshSelection();
+  assert.equal(instance.getAnswerGiven(), true);
+  assert.equal(completedStatements(instance).length, 2);
+});
+
+test('parent compatibility: parent reset clears unfinished and completed attempts without Retry or focus movement', () => {
+  const {Constructor, document} = createHarness();
+  const instance = new Constructor({behaviour: {enableRetry: false}, activity: {
+    distractors: 'Wrong', sets: [{word: 'One', context: 'ONE'}]
+  }});
+  instance.attach();
+  assert.equal(instance.buttons['try-again'], undefined);
+  submitWord(instance, 'Wrong');
+  instance.resetTask();
+  assert.equal(instance.selectionSession.getSetState().attempts, 0);
+  assert.equal(instance.getAnswerGiven(), false);
+  submitWord(instance, 'One');
+  assert.equal(instance.getAnswerGiven(), true);
+  const outside = document.createElement('button');
+  outside.focus();
+  instance.resetTask();
+  assert.equal(document.activeElement, outside);
+  assert.equal(instance.getAnswerGiven(), false);
+  assert.equal(instance.getScore(), 0);
+  assert.equal(instance.getMaxScore(), 2);
+  assert.equal(instance.selectionSession.getSetState().attempts, 0);
+  assert.equal(instance.resultsView, null);
+  assert.equal(instance.selectionElements.resultsHost.children.length, 0);
+  assert.equal(instance.getCurrentState().results, false);
+  submitWord(instance, 'One');
+  instance.checkAnswer();
+  instance.attach();
+  assert.equal(instance.getAnswerGiven(), true);
+  assert.equal(completedStatements(instance).length, 2);
+});
+
+test('parent compatibility: pre-attachment reset discards unfinished and completed saved attempts', () => {
+  const {Constructor, document} = createHarness();
+  const params = {behaviour: {enableRetry: false}, activity: {
+    distractors: 'Wrong', sets: [{word: 'One', context: 'ONE'}]
+  }};
+  const source = new Constructor(params, 42);
+  source.attach();
+  submitWord(source, 'Wrong');
+  const unfinished = JSON.parse(JSON.stringify(source.getCurrentState()));
+  submitWord(source, 'One');
+  const completed = JSON.parse(JSON.stringify(source.getCurrentState()));
+  for (const previousState of [unfinished, completed]) {
+    const instance = new Constructor(params, 42, {previousState});
+    const outside = document.createElement('button');
+    outside.focus();
+    instance.resetTask();
+    assert.equal(instance.selectionSession, null);
+    assert.equal(instance.getAnswerGiven(), false);
+    instance.attach();
+    assert.equal(document.activeElement, outside);
+    assert.equal(instance.getAnswerGiven(), false);
+    assert.equal(instance.getScore(), 0);
+    assert.equal(instance.selectionSession.getSetState().attempts, 0);
+    assert.equal(instance.selectionElements.answerControl.value, '');
+    assert.equal(instance.selectionElements.resultsHost.children.length, 0);
+    assert.equal(completedStatements(instance).length, 0);
+    submitWord(instance, 'One');
+    instance.checkAnswer();
+    assert.equal(instance.getAnswerGiven(), true);
+    assert.equal(completedStatements(instance).length, 1);
+  }
+});
+
 test('Set order runtime restoration and Retry follow the selected policy', async () => {
   for (const policy of [undefined, 'shuffle', 'author']) {
     let draw = 0;

@@ -2,10 +2,11 @@
 
 A standalone H5P concordance activity. Authors paste lines containing a target
 Word; learners identify the automatically hidden word using a dropdown or typed input.
-Source declarations are **1.1.0**, requiring **H5P Core API 1.28**. The exact
-package passed validation and user-reported independent WordPress installation
-and Firefox acceptance. GitHub publication is prepared but not performed. See
-the [1.1.0 release record](docs/release-1.1.0.md).
+Source declarations are **1.1.1**, requiring **H5P Core API 1.28**.
+The current published release is 1.1.0. Version 1.1.1 adds parent task,
+completion and reset compatibility; see the [release notes](RELEASE-NOTES.md).
+The accepted 1.1.0 package is documented in the
+[1.1.0 release record](docs/release-1.1.0.md).
 
 First stable standalone release. The exact distribution has passed independent
 WordPress installation, installed-version verification and Firefox acceptance for
@@ -28,8 +29,8 @@ not invalidate typed attempts. Completed restoration does not replay xAPI comple
 Phases 2B and 2C have passed user-reported local Firefox acceptance, including
 Set order placement in Behavioural settings. The exact 1.1.0 package has also
 passed independent WordPress installation and Firefox acceptance. This does not
-establish fractional My Results support. Source declarations are now 1.1.0;
-the published 1.0.0 package remains unchanged. See the
+establish fractional My Results support. Source declarations are now 1.1.1;
+the published 1.1.0 package remains unchanged. See the
 [restoration checkpoint report](docs/typed-state-checkpoint.md).
 
 Typed mode also offers **Points deducted per incorrect attempt**: 1 (default)
@@ -177,9 +178,11 @@ completion/success true even at raw zero, score min 0 and the active-category
 raw/max. Completed restoration and repeated rendering are quiet; Retry permits a
 new completion. Delivery to an LRS remains the host's responsibility.
 
-Version 1.1.0 remains standalone. QuestionSetPapiJo and InteractiveBookPapiJo integration
-are deferred, as are other parent containers. resetTask, showSolutions and
-getXAPIData parent interfaces remain absent; getAnswerGiven remains false.
+Version 1.1.1 exposes Boolean `isTask = true`, completion-based `getAnswerGiven()`
+and parent-callable `resetTask()`. User-reported H5P CLI and local WordPress testing
+passed completion recognition, partial scoring, Summary and Restart inside
+ColumnPapiJo and InteractiveBookPapiJo. `showSolutions` and `getXAPIData` parent
+interfaces remain absent.
 
 ## Presentation and dependencies
 

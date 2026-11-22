@@ -1,3 +1,21 @@
+# H5P.ConcordancesPapiJo 1.1.1
+
+Requires H5P Core API 1.28 and a modern browser with Intl.Segmenter support.
+
+- Boolean `isTask = true` identifies the activity as a task to parent containers.
+- Completion-based `getAnswerGiven()` recognizes completed selected-category
+  activities independently of score, including restored completed attempts.
+- Parent-callable `resetTask()` clears unfinished or completed attempts, including
+  saved state before attachment, independently of learner Retry availability and
+  without moving focus.
+- Focused regression tests cover parent completion, restoration, Retry and reset.
+
+User-reported integration testing passed in H5P CLI and local WordPress,
+including completion recognition, partial scoring, Summary and Restart inside
+ColumnPapiJo and InteractiveBookPapiJo.
+
+---
+
 # H5P.ConcordancesPapiJo 1.1.0
 
 Requires H5P Core API 1.28 and a modern browser with Intl.Segmenter support.
