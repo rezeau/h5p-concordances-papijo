@@ -3,6 +3,73 @@ const assert=require('node:assert/strict'),{test}=require('node:test');
 const renderer=require('../scripts/concordances-renderer.js');
 const {createDocument,findAll}=require('./helpers/dom.cjs');
 const options={headingId:'set',label:'Set 1',decodeEditorText:true,a11y:{missingWord:'missing word',kwicRegion:'Scroll context',contextAlternative:'Reading context'}};
+
+// Synthetic browser geometry keeps these checks focused, without a browser suite.
+function kwicLayout(context = 'A cat sits.') {
+  const document = createDocument(), observers = [];
+  document.defaultView = {ResizeObserver: class {
+    constructor(callback) { this.notify = callback; this.targets = []; observers.push(this); }
+    observe(target) { this.targets.push(target); }
+    disconnect() { this.disconnected = true; }
+  }};
+  const view = renderer.renderSet(document, {word:'cat', context}, options);
+  const scroll = view.scroll, geometry = {centre:650, keywordWidth:50, writes:0};
+  Object.assign(scroll, {clientWidth:300, scrollWidth:1200, clientLeft:2, isConnected:true});
+  let offset = 0;
+  Object.defineProperty(scroll, 'scrollLeft', {
+    get: () => offset, set: value => { offset = value; geometry.writes++; }
+  });
+  scroll.getBoundingClientRect = () => ({left:100});
+  const measureKeyword = () => {
+    view.keywordNode.getBoundingClientRect = () => ({
+      left:102 + geometry.centre - geometry.keywordWidth / 2 - offset, width:geometry.keywordWidth
+    });
+  };
+  measureKeyword();
+  const layout = renderer.observeKwic(view);
+  return {view, scroll, geometry, layout, observer:observers[0], measureKeyword};
+}
+
+test('KWIC centring measures the keyword, clamps both ends and leaves fitting contexts alone', () => {
+  const {scroll, geometry, layout, observer} = kwicLayout();
+  assert.equal(scroll.scrollLeft, 500); // Half the scroll range would be 450.
+  assert.equal(observer.targets.length, 2);
+  geometry.centre = 1150; layout.update(); assert.equal(scroll.scrollLeft, 900);
+  geometry.centre = 60; layout.update(); assert.equal(scroll.scrollLeft, 0);
+  const writes = geometry.writes;
+  scroll.scrollWidth = 280; layout.update(); assert.equal(geometry.writes, writes);
+});
+
+test('KWIC centring preserves manual scrolling on repeated layout events and handles hidden views', () => {
+  const {scroll, geometry, layout, observer} = kwicLayout();
+  scroll.scrollLeft = 80;
+  observer.notify(); layout.update();
+  assert.equal(scroll.scrollLeft, 80);
+  scroll.clientWidth = 400; observer.notify(); assert.equal(scroll.scrollLeft, 450);
+  scroll.clientWidth = 0; observer.notify();
+  scroll.clientWidth = 400; observer.notify(); assert.equal(scroll.scrollLeft, 450);
+  scroll.isConnected = false; scroll.scrollLeft = 0; observer.notify();
+  assert.equal(scroll.scrollLeft, 0);
+  scroll.isConnected = true; observer.notify(); assert.equal(scroll.scrollLeft, 450);
+  layout.disconnect();
+  const writes = geometry.writes;
+  scroll.clientWidth = 500; observer.notify(); layout.update();
+  assert.equal(observer.disconnected, true); assert.equal(geometry.writes, writes);
+});
+
+test('KWIC centring uses the primary NODE or preformatted gap and follows correct-answer replacement', () => {
+  const lancsbox = kwicLayout('cat on the left\tcat\t on the right').view;
+  assert.equal(lancsbox.keywordNode.className, 'h5p-concordances-papijo-kwic-primary');
+  assert.notEqual(lancsbox.keywordNode.children[0], lancsbox.gapNodes[0]);
+  const {view, scroll, geometry, layout, measureKeyword} = kwicLayout('[001]  cat  sits.');
+  assert.equal(view.keywordNode, view.gapNodes[0]);
+  scroll.scrollLeft = 80;
+  renderer.revealSet(view); measureKeyword(); layout.update();
+  assert.equal(view.keywordNode.tagName, 'STRONG');
+  assert.equal(scroll.scrollLeft, 80); // No movement when revelation keeps the same geometry.
+  geometry.centre = 670; layout.update(); assert.equal(scroll.scrollLeft, 520);
+});
+
 test('ordinary and LancsBox inputs share gaps, safe punctuation, revelation and accessible alternatives',()=>{
  for(const [context,expected] of [
   ['[001] &quot;ABSTRACT&quot; isn&#039;t &lt;tag&gt;  ABSTRACTions\r\n[002]\tsemi-ABSTRACT\u00a0 &amp;quot;', '[001] "_____" isn\'t <tag>  _____ions\r\n[002]\tsemi-_____\u00a0 &amp;quot;'],

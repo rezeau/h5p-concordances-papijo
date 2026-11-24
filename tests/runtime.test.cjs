@@ -130,6 +130,37 @@ async function solveAttempt(instance) {
 
 const completedStatements = (instance) => instance.events.filter(event=>event.name==='xAPI').map(event=>event.data.statement);
 
+test('KWIC lifecycle centres on attachment and revelation, replaces observers and disposes them', () => {
+  const {Constructor, document} = createHarness(), observers = [];
+  document.defaultView = {ResizeObserver: class {
+    constructor(callback) { this.notify = callback; this.targets = []; observers.push(this); }
+    observe(target) { this.targets.push(target); }
+    disconnect() { this.disconnected = true; }
+  }};
+  const instance = new Constructor({activity:{setOrder:'author', sets:[
+    {word:'One', context:'One example.'}, {word:'Two', context:'Two examples.'}
+  ]}});
+  instance.attach(); // Registration starts detached, without measurable geometry.
+  const {scroll, keywordNode} = instance.setView;
+  Object.assign(scroll, {clientWidth:300, scrollWidth:1200, clientLeft:2, isConnected:true, scrollLeft:0});
+  scroll.getBoundingClientRect = () => ({left:100});
+  keywordNode.getBoundingClientRect = () => ({
+    left:702 - scroll.scrollLeft, width:instance.setView.revealed ? 100 : 50
+  });
+  instance.attach(); assert.equal(scroll.scrollLeft, 475);
+  scroll.scrollLeft = 80;
+  instance.refreshSelection(); instance.trigger('resize'); observers[0].notify();
+  assert.equal(scroll.scrollLeft, 80);
+  const events = instance.events.length;
+  scroll.clientWidth = 400; observers[0].notify();
+  assert.equal(scroll.scrollLeft, 425); assert.equal(instance.events.length, events);
+  submitWord(instance, 'One'); assert.equal(scroll.scrollLeft, 450);
+  instance.nextSet();
+  assert.equal(observers[0].disconnected, true);
+  assert.equal(observers.length, 2);
+  instance.destroy(); assert.equal(observers[1].disconnected, true);
+});
+
 test('parent compatibility: selected-category completion and restoration are independent of score', () => {
   for (const wrongs of [0, 1, 2]) {
     const {Constructor} = createHarness();

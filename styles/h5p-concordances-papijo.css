@@ -42,6 +42,7 @@
   min-width: 0;
   max-width: 100%;
   overflow-x: auto;
+  scroll-behavior: auto;
   padding: var(--h5p-theme-spacing-xs, 0.5rem);
   border: 1px solid var(--h5p-theme-text-secondary, #555);
 }

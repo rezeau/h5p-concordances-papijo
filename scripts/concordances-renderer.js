@@ -84,6 +84,7 @@
     // Classification is for the whole display copy, never stored authoring data.
     const normalized = utilities.normalizeConcordance(context);
     const lancsbox = normalized.format === 'lancsbox';
+    let primaryNode = null;
     if (lancsbox || isPlainContext(context)) {
       pre.className += ' h5p-concordances-papijo-tabular';
       const gapElements = new Map(tokens.filter((token) => token.type === 'gap')
@@ -116,6 +117,7 @@
         if (anchor) {
           appendRange(0, anchor.start, 'h5p-concordances-papijo-kwic-left');
           appendRange(anchor.start, anchor.end, 'h5p-concordances-papijo-kwic-primary');
+          if (!primaryNode) primaryNode = row.children[1];
           appendRange(anchor.end, length, 'h5p-concordances-papijo-kwic-right');
           // Keep the primary and suffix inline so different revealed widths never
           // insert a grid-sized space before the continuation.
@@ -140,7 +142,46 @@
       return paragraph;
     });
     section.appendChild(alternative);
-    return {element: section, heading, pre, scroll, alternative, accessibleLines, tokens, gapNodes, lineTokens};
+    return {element: section, heading, pre, scroll, alternative, accessibleLines, tokens, gapNodes, lineTokens,
+      keywordNode: primaryNode || gapNodes[0]};
+  }
+
+  /** Centre measured KWIC geometry only when its width or centring target changes. */
+  function observeKwic(view) {
+    const {scroll, pre} = view;
+    let previous = null, disposed = false;
+    const update = () => {
+      if (disposed) return;
+      const width = scroll.clientWidth;
+      // Keep observing hidden/detached views so their first visible layout is handled.
+      if (!width || !scroll.isConnected) {
+        previous = null;
+        return;
+      }
+      const keyword = view.keywordNode;
+      if (!keyword) return;
+      const rect = keyword.getBoundingClientRect();
+      const centre = scroll.scrollLeft + rect.left - scroll.getBoundingClientRect().left -
+        scroll.clientLeft + rect.width / 2;
+      const maximum = Math.max(0, scroll.scrollWidth - width);
+      const target = Math.max(0, Math.min(maximum, centre - width / 2));
+      // Scroll offsets cancel out above: manual scrolling does not change the target.
+      // Ignore height-only notifications and repeated H5P resize/attachment events.
+      if (previous && previous.width === width && Math.abs(previous.target - target) < 0.5) return;
+      previous = {width, target};
+      if (maximum > 0 && Math.abs(scroll.scrollLeft - target) >= 0.5) scroll.scrollLeft = target;
+    };
+    const ResizeObserver = pre.ownerDocument.defaultView?.ResizeObserver;
+    const observer = ResizeObserver ? new ResizeObserver(update) : null;
+    if (observer) {
+      observer.observe(scroll);
+      observer.observe(pre);
+    }
+    update();
+    return {update, disconnect() {
+      disposed = true;
+      if (observer) observer.disconnect();
+    }};
   }
 
   /** Reveal only gap nodes. Surrounding text nodes and stored Context stay untouched. */
@@ -150,6 +191,7 @@
     view.gapNodes.forEach((gap, index) => {
       const strong = element(view.pre.ownerDocument, 'strong', 'h5p-concordances-papijo-revealed-word', matches[index].text);
       gap.parentNode.replaceChild(strong, gap);
+      if (view.keywordNode === gap) view.keywordNode = strong;
     });
     view.accessibleLines.forEach((paragraph, index) => {
       paragraph.textContent = view.lineTokens[index].map((token) => token.text).join('');
@@ -355,5 +397,5 @@
     return {element: container, hintStatus, hintReveal, categorySelect, categorySummary, progress, setHost, answerSelect, answerControl: answerSelect, feedback, announcement, sequenceEnd, resultsHost};
   }
 
-  return Object.freeze({renderSpellingWarning, renderSet, revealSet, renderDiagnostics, categoryLabel, renderResults, populateAnswers, renderSelectionControls});
+  return Object.freeze({renderSpellingWarning, renderSet, observeKwic, revealSet, renderDiagnostics, categoryLabel, renderResults, populateAnswers, renderSelectionControls});
 });

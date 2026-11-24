@@ -2,10 +2,10 @@
 
 A standalone H5P concordance activity. Authors paste lines containing a target
 Word; learners identify the automatically hidden word using a dropdown or typed input.
-Source declarations are **1.1.2**, requiring **H5P Core API 1.28**.
-The current published release is 1.1.1. Version 1.1.2 is a release candidate
-adding automatic ordinary-sentence KWIC alignment, the KWIC library icon and
-clean CLI packaging while retaining 1.1.1 parent integration; see the
+Source declarations are **1.1.3**, requiring **H5P Core API 1.28**.
+The current published release is 1.1.2. Version 1.1.3 is prepared for WordPress
+acceptance, adding automatic horizontal KWIC centring while preserving manual
+scrolling and native browser scrollbar behaviour; see the
 [release notes](RELEASE-NOTES.md).
 The accepted 1.1.0 package is documented in the
 [1.1.0 release record](docs/release-1.1.0.md).
@@ -31,8 +31,8 @@ not invalidate typed attempts. Completed restoration does not replay xAPI comple
 Phases 2B and 2C have passed user-reported local Firefox acceptance, including
 Set order placement in Behavioural settings. The exact 1.1.0 package has also
 passed independent WordPress installation and Firefox acceptance. This does not
-establish fractional My Results support. Source declarations are now 1.1.2;
-the published 1.1.0 and 1.1.1 packages remain unchanged. See the
+establish fractional My Results support. Source declarations are now 1.1.3;
+the published 1.1.0, 1.1.1 and 1.1.2 packages remain unchanged. See the
 [restoration checkpoint report](docs/typed-state-checkpoint.md).
 
 Typed mode also offers **Points deducted per incorrect attempt**: 1 (default)
@@ -201,6 +201,15 @@ revelation. Matching, authoring data, scoring, hints, saved state and xAPI are u
 Ambiguous preformatted content is conservatively left unaligned; unmarked text
 identical to ordinary sentences cannot be distinguished by origin.
 
+Version 1.1.3 automatically centres the keyword or gap as closely as the available
+horizontal scroll range permits when contexts overflow. It adjusts on initial
+display, Set navigation, container resizing and correct-answer insertion when
+needed. Ordinary sentences, LancsBox and preformatted Multiconc retain their
+existing alignment and whitespace. Learners can scroll manually; repeated layout
+events with unchanged geometry do not reset their position. Native browser
+scrollbars and accessibility preferences are retained, including Firefox's
+platform-dependent scrollbar auto-hiding.
+
 The root KWIC speech-bubble icon is included by the release builder. Root
 `.h5pignore` permits runtime/editor assets and the icon for standard CLI packing,
 excluding development and historical release directories. Keep development files
@@ -219,11 +228,11 @@ Papi Jo author metadata are retained.
 
 ## Installation and verification
 
-Published 1.1.0 and 1.1.1 artifacts and tags are preserved. The 1.1.2 candidate is
-prepared separately and has not been published. User-reported Firefox CLI and
-WordPress acceptance passed all three KWIC formats; standard CLI packaging and
-installation passed, and the icon was approved and displayed in WordPress.
-These completed checks were not repeated for candidate preparation.
+Published releases through 1.1.2 and historical release directories are preserved.
+Version 1.1.3 has passed user-reported manual Firefox acceptance for automatic
+KWIC centring, standalone and inside InteractiveBookPapiJo. Native browser
+scrollbar behaviour is accepted. The prepared package awaits WordPress acceptance
+and explicit publication authorization; it has not been published.
 
 The accepted 1.1.0 archive's exact filename,
 hash and installation qualifications are in the [release record](docs/release-1.1.0.md).

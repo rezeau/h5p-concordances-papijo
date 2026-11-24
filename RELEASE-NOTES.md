@@ -1,4 +1,26 @@
-# H5P.ConcordancesPapiJo 1.1.2 — release candidate
+# H5P.ConcordancesPapiJo 1.1.3 — prepared for WordPress acceptance
+
+Requires H5P Core API 1.28 and a modern browser with Intl.Segmenter support.
+
+- Automatic horizontal centring of the keyword or gap when KWIC contexts overflow,
+  measured from actual geometry and clamped to the available scroll range.
+- Dynamic adjustment on container resizing and concordance Set navigation,
+  including initially hidden content and correct-answer insertion when needed.
+- Manual scrolling is preserved during ordinary interaction with unchanged geometry.
+- Ordinary sentences, LancsBox and preformatted Multiconc keep their alignment,
+  whitespace, keyword suffixes and punctuation.
+- Native browser scrollbar behaviour is retained, including Firefox auto-hiding
+  according to browser/platform preferences; no custom scrollbar is introduced.
+
+No changes to authoring semantics, matching, scoring, hints, saved state or xAPI.
+Focused automated checks and all user-reported manual Firefox centring acceptance
+tests passed, standalone and inside InteractiveBookPapiJo. The release package
+awaits WordPress acceptance and explicit publication authorization.
+Existing dependency and host compatibility qualifications remain applicable.
+
+---
+
+# H5P.ConcordancesPapiJo 1.1.2
 
 Requires H5P Core API 1.28 and a modern browser with Intl.Segmenter support.
 
@@ -17,7 +39,8 @@ signals is treated as ordinary input. Existing compatibility qualifications rema
 User-reported Firefox CLI and WordPress acceptance passed all three KWIC formats.
 Standard CLI packaging/installation and WordPress icon display passed. These
 checks were completed before candidate preparation and were not repeated.
-Published releases and tags are unchanged; this candidate has not been published.
+Version 1.1.2 was subsequently published and accepted standalone and inside
+InteractiveBookPapiJo.
 
 ---
 

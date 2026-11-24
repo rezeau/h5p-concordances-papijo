@@ -133,6 +133,7 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
     this.domRegistered = false;
     this.selectionSession = null;
     this.completionEmitted = false;
+    this.on('resize', () => this.kwicLayout?.update());
     this.on('domChanged', (event) => {
       // Question emits this after attaching sections. Do not echo resize events.
       if (event.data && event.data.library === 'H5P.ConcordancesPapiJo') {
@@ -280,8 +281,10 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
         label: this.params.l10n.setLabel.replace(/@set\b/g, String(session.currentPosition + 1)),
         a11y: this.params.a11y, decodeEditorText: true
       });
+      this.kwicLayout?.disconnect();
       controls.setHost.replaceChildren(view.element);
       this.setView = view;
+      this.kwicLayout = renderer.observeKwic(view);
       this.displayedSetIndex = index;
     }
     // The same Set may occupy a different position after filtering.
@@ -289,7 +292,10 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
       String(session.currentPosition + 1));
     this.setView.scroll.setAttribute('aria-describedby', controls.progress.id);
     const state = session.getSetState();
-    if (state?.correct) renderer.revealSet(this.setView, this.params.activity.sets[session.displayedSetIndex].word);
+    if (state?.correct && !this.setView.revealed) {
+      renderer.revealSet(this.setView, this.params.activity.sets[session.displayedSetIndex].word);
+      this.kwicLayout.update();
+    }
     const value = session.answerMode === 'typed' ? state.typedText
       : session.selectedAnswerIndex === null ? '' : String(session.selectedAnswerIndex);
     // Avoid resetting the caret during routine input updates.
@@ -317,6 +323,11 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
     this.updateCheckButton();
     // Only a user category change to a different Set moves focus; reattachment does not.
     if (focusAnswer) (state?.correct ? this.setView.scroll : controls.answerControl).focus();
+  };
+
+  /** Release layout observation when a host disposes of this activity. */
+  ConcordancesPapiJo.prototype.destroy = function () {
+    this.kwicLayout?.disconnect();
   };
 
   /** Derived feedback only: no persisted exhaustion flag or changes to checking. */
