@@ -59,5 +59,7 @@ test('installed ShowWhenpapijo follows wrapped selects with AND and preserves th
     controller.set('mistake'); assert.equal(wrappers[1].hidden, true);
     mode.set('typed'); assert.equal(wrappers[1].hidden, true);
     controller.set('warn'); assert.equal(wrappers[1].hidden, false);
+    mode.set('learner'); assert.equal(wrappers[1].hidden, false);
+    controller.set('mistake'); assert.equal(wrappers[1].hidden, true);
     assert.equal(values.allowance, '3');
   });

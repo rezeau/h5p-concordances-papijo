@@ -404,5 +404,65 @@
     catch (error) { return null; }
   }
 
-  return Object.freeze({VERSION, TYPED_VERSION, fingerprint, createState, validateState, restoreSession});
+  /** Resolve only after a learner has chosen a concrete mode. */
+  function effectiveBehaviour(authored, mode) {
+    const source = {...authored, answerMode: mode};
+    return {...source, typedPenalty: utilities.resolveTypedPenalty(source),
+      spellingErrorBehaviour: utilities.resolveSpellingPolicy(source),
+      freeSpellingWarnings: utilities.resolveWarningAllowance(source),
+      enableProgressiveHints: source.enableProgressiveHints === true};
+  }
+
+  function choiceCategories(activity) {
+    return activity.enableCategories ? sessionModel.buildCategories(activity.sets) : [{id: 'all', type: 'all'}];
+  }
+
+  function categoryToken(category) {
+    return category.type === 'named' ? ['named', category.key] : [category.type];
+  }
+
+  function createLearnerState(activity, authored, choice, session, page) {
+    const category = choiceCategories(activity).find(entry => entry.id === choice.categoryId);
+    if (!category) return {};
+    return {format: 'learner-answer-mode', version: 1, stage: session ? 'attempt' : 'selection',
+      mode: choice.mode, category: categoryToken(category),
+      fingerprint: fingerprint(activity, effectiveBehaviour(authored, choice.mode)),
+      attemptState: session ? createState(activity, session, page) : null};
+  }
+
+  /** Validate the outer presentation envelope before restoring the unchanged attempt. */
+  function restoreLearnerState(activity, authored, candidate) {
+    try {
+      const fields = ['format', 'version', 'stage', 'mode', 'category', 'fingerprint', 'attemptState'];
+      if (record(candidate, fields)) {
+        if (candidate.format !== 'learner-answer-mode' || candidate.version !== 1 ||
+          !['selection', 'attempt'].includes(candidate.stage) || !['dropdown', 'typed'].includes(candidate.mode) ||
+          !array(candidate.category) || !candidate.category.every(value => typeof value === 'string')) return null;
+        const behaviour = effectiveBehaviour(authored, candidate.mode);
+        if (!candidate.fingerprint || candidate.fingerprint !== fingerprint(activity, behaviour)) return null;
+        const category = choiceCategories(activity).find(entry =>
+          JSON.stringify(categoryToken(entry)) === JSON.stringify(candidate.category));
+        if (!category) return null;
+        const choice = {mode: candidate.mode, categoryId: category.id};
+        if (candidate.stage === 'selection') return candidate.attemptState === null ? {choice, session: null, page: false} : null;
+        const validated = validateState(activity, candidate.attemptState, behaviour);
+        if (!validated.valid || JSON.stringify(validated.state.category) !== JSON.stringify(candidate.category)) return null;
+        const session = restoreSession(activity, candidate.attemptState, behaviour);
+        return session ? {choice, session, page: validated.resultsPageVisible} : null;
+      }
+      // Published fixed-mode snapshots have no envelope. Infer only through full validation.
+      for (const mode of ['dropdown', 'typed']) {
+        const behaviour = effectiveBehaviour(authored, mode);
+        const validated = validateState(activity, candidate, behaviour);
+        if (!validated.valid) continue;
+        const session = restoreSession(activity, candidate, behaviour);
+        if (session) return {choice: {mode, categoryId: session.categoryId}, session, page: validated.resultsPageVisible};
+      }
+    }
+    catch (error) { /* Invalid or inaccessible state returns to selection. */ }
+    return null;
+  }
+
+  return Object.freeze({VERSION, TYPED_VERSION, fingerprint, createState, validateState, restoreSession,
+    effectiveBehaviour, choiceCategories, createLearnerState, restoreLearnerState});
 });

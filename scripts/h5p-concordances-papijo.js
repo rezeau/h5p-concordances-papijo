@@ -4,6 +4,10 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
   'use strict';
 
   const DEFAULT_TEXT = {
+    modeLabel: 'Answer mode',
+    selectWord: 'Select word',
+    typeWord: 'Type word',
+    start: 'Start',
     hintAvailable: 'Hint available',
     hintAfterRequest: 'Submit an answer with a longer correct prefix to unlock the next hint. At zero points, make a new scored submission.',
     hintRevealed: 'Letter hint: @hint',
@@ -99,6 +103,10 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
     const activity = isRecord(source.activity) ? source.activity : {};
     const behaviour = isRecord(source.behaviour) ? source.behaviour : {};
 
+    this.learnerChoice = behaviour.answerMode === 'learner';
+    this.authoredBehaviour = {...behaviour};
+    this.choice = {mode: 'dropdown', categoryId: 'all'};
+    this.viewListeners = [];
     this.contentId = contentId;
     this.contentData = isRecord(contentData) ? contentData : {};
     this.isTask = true;
@@ -139,24 +147,12 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
     this.on('domChanged', (event) => {
       // Question emits this after attaching sections. Do not echo resize events.
       if (event.data && event.data.library === 'H5P.ConcordancesPapiJo') {
-        // Question 1.5 exposes addButton but no public disabled-state setter.
-        // Capture only our button in this instance's attached container.
+        if (this.destroyed) return;
         const target = event.data.$target && event.data.$target[0];
         if (target) {
-          this.checkButton = target.querySelector('.' + this.domId + '-check');
-          this.hintButton = target.querySelector('.' + this.domId + '-hint');
-          const next = target.querySelector('.' + this.domId + '-next');
-          if (next && next !== this.nextButton) {
-            // Suppress the second click of a native double-click, even when the
-            // following Set was already solved through another category.
-            next.addEventListener('click', (event) => {
-              if (event.detail > 1) {
-                event.preventDefault();
-                event.stopImmediatePropagation();
-              }
-            }, true);
-            this.nextButton = next;
-          }
+          // Ignore another instance's bubbled attachment event.
+          if (!this.instruction || !target.contains(this.instruction[0])) return;
+          this.watchQuestionButtons(target);
         }
         this.updateCheckButton();
         this.trigger('resize');
@@ -166,6 +162,63 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
 
   ConcordancesPapiJo.prototype = Object.create(Question.prototype);
   ConcordancesPapiJo.prototype.constructor = ConcordancesPapiJo;
+
+  /** Question detaches hidden buttons and reinserts them without domChanged. */
+  ConcordancesPapiJo.prototype.watchQuestionButtons = function (target) {
+    if (this.buttonRoot !== target) {
+      this.stopWatchingButtons();
+      this.buttonRoot = target;
+      const Observer = target.ownerDocument.defaultView?.MutationObserver || globalThis.MutationObserver;
+      if (Observer) {
+        const observer = new Observer(() => {
+          if (this.destroyed || this.buttonObserver !== observer || this.buttonRoot !== target) return;
+          this.synchronizeButtonStates();
+        });
+        this.buttonObserver = observer;
+        // Child lists only: disabled/ARIA writes cannot retrigger this observer.
+        observer.observe(target, {childList: true, subtree: true});
+      }
+    }
+    this.syncQuestionButtons();
+  };
+
+  ConcordancesPapiJo.prototype.stopWatchingButtons = function () {
+    this.buttonObserver?.disconnect();
+    this.buttonObserver = null;
+    this.buttonRoot = null;
+    if (this.nextGuardButton) this.nextGuardButton.removeEventListener('click', this.nextClickGuard, true);
+    this.nextGuardButton = null;
+    this.checkButton = this.hintButton = this.nextButton = null;
+  };
+
+  ConcordancesPapiJo.prototype.syncQuestionButtons = function () {
+    const root = this.buttonRoot;
+    if (!root || this.destroyed) return false;
+    let changed = false;
+    for (const [property, suffix] of [['checkButton', 'check'], ['hintButton', 'hint'], ['nextButton', 'next']]) {
+      const className = this.domId + '-' + suffix;
+      const current = this[property];
+      const owned = current && current.ownerDocument === root.ownerDocument &&
+        (current.getAttribute('class') || '').split(/\s+/).includes(className) &&
+        !(current.isConnected && !root.contains(current));
+      const button = root.querySelector('.' + className) || (owned ? current : null);
+      if (button === current) continue;
+      this[property] = button;
+      changed = true;
+      if (property === 'nextButton') {
+        if (this.nextGuardButton) this.nextGuardButton.removeEventListener('click', this.nextClickGuard, true);
+        this.nextGuardButton = button;
+        this.nextClickGuard ||= event => {
+          if (event.detail > 1) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+          }
+        };
+        button?.addEventListener('click', this.nextClickGuard, true);
+      }
+    }
+    return changed;
+  };
 
   /** Validate every Set before registering any KWIC text with the Question shell. */
   ConcordancesPapiJo.prototype.registerDomElements = function () {
@@ -191,75 +244,32 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
       }));
     }
     else {
-      // Read once at initial registration. Invalid or inaccessible host data starts clean.
+      // Read host state once; learner envelopes resolve the mode before restoration.
       try {
         const previousState = this.contentData.previousState;
-        this.selectionSession = stateModel.restoreSession(this.params.activity, previousState, this.params.behaviour);
-        this.resultsPageVisible = Boolean(this.selectionSession &&
-          stateModel.validateState(this.params.activity, previousState, this.params.behaviour).resultsPageVisible);
+        if (this.learnerChoice) {
+          const restored = stateModel.restoreLearnerState(this.params.activity, this.authoredBehaviour, previousState);
+          if (restored) {
+            this.choice = restored.choice;
+            this.selectionSession = restored.session;
+            this.resultsPageVisible = restored.page;
+            this.resolveChoiceBehaviour();
+          }
+        }
+        else {
+          this.selectionSession = stateModel.restoreSession(this.params.activity, previousState, this.params.behaviour);
+          this.resultsPageVisible = Boolean(this.selectionSession &&
+            stateModel.validateState(this.params.activity, previousState, this.params.behaviour).resultsPageVisible);
+        }
       }
       catch (error) { this.selectionSession = null; this.resultsPageVisible = false; }
-      if (!this.selectionSession) this.selectionSession = sessionModel.createSelectionSession(this.params.activity, undefined, null, this.params.behaviour.answerMode, this.params.behaviour.typedPenalty, this.params.behaviour.spellingErrorBehaviour, this.params.behaviour.freeSpellingWarnings, this.params.behaviour.enableProgressiveHints);
-      this.completionEmitted = this.selectionSession.allSolved;
-      this.selectionElements = renderer.renderSelectionControls(document, this.selectionSession, {
-        domId: this.domId, enableHints: this.params.behaviour.answerMode === 'typed' && this.params.behaviour.enableProgressiveHints, enableCategories: this.params.activity.enableCategories, l10n: this.params.l10n
-      });
-      $content[0].appendChild(this.selectionElements.element);
-      const {categorySelect, answerSelect} = this.selectionElements;
-      if (categorySelect) {
-        categorySelect.addEventListener('change', () => {
-          if (this.selectionSession.categoryLocked) {
-            categorySelect.value = this.selectionSession.categoryId;
-            return;
-          }
-          const previous = this.selectionSession.displayedSetIndex;
-          this.selectionSession.selectCategory(categorySelect.value);
-          this.refreshSelection(previous !== this.selectionSession.displayedSetIndex);
-          this.trigger('resize');
-        });
-      }
-      if (this.params.behaviour.answerMode === 'typed') {
-        answerSelect.addEventListener('input', () => {
-          this.selectionSession.setTypedAnswer(answerSelect.value);
-          this.refreshSelection();
-        });
-        answerSelect.addEventListener('compositionstart', () => { this.answerComposing = true; });
-        answerSelect.addEventListener('compositionend', () => { this.answerComposing = false; });
-        answerSelect.addEventListener('keydown', (event) => {
-          if (event.key !== 'Enter') return;
-          event.preventDefault();
-          if (event.repeat || event.isComposing || event.keyCode === 229 || this.answerComposing) return;
-          this.checkAnswer();
-        });
-      }
-      else answerSelect.addEventListener('change', () => {
-        this.selectionSession.selectAnswer(answerSelect.value);
-        this.refreshSelection();
-      });
-      this.addButton('check-answer', buttonText(this.params.l10n.check), () => this.checkAnswer(), true, {
-        disabled: true, classes: this.domId + '-check',
-        'aria-label': buttonText(this.params.l10n.check)
-      });
-      if (this.selectionElements.hintStatus) {
-        // Always inert in 3a; unlocking displays a status, never a no-op action.
-        this.addButton('letter-hint', buttonText(this.params.l10n.hint), () => this.requestHint(), true, {
-          disabled: true, classes: this.domId + '-hint', 'aria-label': buttonText(this.params.l10n.hint)
-        });
-      }
-      this.addButton('next-set', buttonText(this.params.l10n.next), () => this.nextSet(), true, {
-        disabled: true, classes: this.domId + '-next',
-        'aria-label': buttonText(this.params.l10n.next)
-      });
-      this.addButton('view-results', buttonText(this.params.l10n.viewResults), () => this.viewResults(), false, {
-        'aria-label': buttonText(this.params.l10n.viewResults)
-      });
-      if (this.params.behaviour.enableRetry) {
-        // Question has no automatic reset callback: the content type supplies it.
-        this.addButton('try-again', buttonText(this.params.l10n.retry), () => this.retry(), false, {
-          classes: this.domId + '-retry', 'aria-label': buttonText(this.params.l10n.retry)
-        });
-      }
-      this.refreshSelection();
+      if (!this.learnerChoice && !this.selectionSession) this.selectionSession = this.createAttemptSession();
+      this.completionEmitted = Boolean(this.selectionSession?.allSolved);
+      this.attemptHost = document.createElement('div');
+      $content[0].appendChild(this.attemptHost);
+      this.registerAttemptButtons();
+      if (this.learnerChoice && !this.selectionSession) this.showChoice();
+      else this.mountAttempt();
     }
     if (this.params.activity.introduction.length > 0) {
       this.setIntroduction($('<p>', { class: 'h5p-concordances-papijo-introduction' })
@@ -270,6 +280,145 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
     this.domRegistered = true;
   };
 
+  ConcordancesPapiJo.prototype.registerAttemptButtons = function () {
+    this.addButton('check-answer', buttonText(this.params.l10n.check), () => this.checkAnswer(), true, {
+      disabled: true, classes: this.domId + '-check',
+      'aria-label': buttonText(this.params.l10n.check)
+    });
+    if (this.params.behaviour.enableProgressiveHints && (this.learnerChoice || this.params.behaviour.answerMode === 'typed')) {
+      // Always inert in 3a; unlocking displays a status, never a no-op action.
+      this.addButton('letter-hint', buttonText(this.params.l10n.hint), () => this.requestHint(), true, {
+        disabled: true, classes: this.domId + '-hint', 'aria-label': buttonText(this.params.l10n.hint)
+      });
+    }
+    this.addButton('next-set', buttonText(this.params.l10n.next), () => this.nextSet(), true, {
+      disabled: true, classes: this.domId + '-next',
+      'aria-label': buttonText(this.params.l10n.next)
+    });
+    this.addButton('view-results', buttonText(this.params.l10n.viewResults), () => this.viewResults(), false, {
+      'aria-label': buttonText(this.params.l10n.viewResults)
+    });
+    if (this.params.behaviour.enableRetry) {
+      // Question has no automatic reset callback: the content type supplies it.
+      this.addButton('try-again', buttonText(this.params.l10n.retry), () => this.retry(), false, {
+        classes: this.domId + '-retry', 'aria-label': buttonText(this.params.l10n.retry)
+      });
+    }
+  };
+
+  ConcordancesPapiJo.prototype.listenView = function (target, name, handler) {
+    target.addEventListener(name, handler);
+    this.viewListeners.push([target, name, handler]);
+  };
+
+  ConcordancesPapiJo.prototype.disposeView = function () {
+    this.kwicLayout?.disconnect();
+    this.kwicLayout = null;
+    this.viewListeners.forEach(([target, name, handler]) => target.removeEventListener(name, handler));
+    this.viewListeners = [];
+    this.setupElements = null;
+    this.selectionElements = null;
+    this.setView = null;
+    this.displayedSetIndex = null;
+    this.attemptHost?.replaceChildren();
+  };
+
+  ConcordancesPapiJo.prototype.resolveChoiceBehaviour = function () {
+    this.params.behaviour = {...this.params.behaviour,
+      ...stateModel.effectiveBehaviour(this.authoredBehaviour, this.choice.mode),
+      enableRetry: this.authoredBehaviour.enableRetry !== false};
+  };
+
+  ConcordancesPapiJo.prototype.createAttemptSession = function () {
+    const b = this.params.behaviour;
+    return sessionModel.createSelectionSession(this.params.activity, undefined, null, b.answerMode,
+      b.typedPenalty, b.spellingErrorBehaviour, b.freeSpellingWarnings, b.enableProgressiveHints);
+  };
+
+  ConcordancesPapiJo.prototype.showChoice = function () {
+    this.disposeView();
+    this.instruction[0].hidden = true;
+    const view = renderer.renderModeChoice(this.attemptHost.ownerDocument, {
+      domId: this.domId, l10n: this.params.l10n, choice: this.choice,
+      createStartButton: typeof H5P.Components?.Button === 'function' ? label => H5P.Components.Button({
+        label: buttonText(label), ariaLabel: buttonText(label), buttonType: 'button',
+        classes: 'h5p-concordances-papijo-start'
+      }) : null,
+      categories: stateModel.choiceCategories(this.params.activity), enableCategories: this.params.activity.enableCategories
+    });
+    this.setupElements = view;
+    this.attemptHost.appendChild(view.element);
+    this.listenView(view.modeSelect, 'change', () => { this.choice.mode = view.modeSelect.value; });
+    if (view.categorySelect) this.listenView(view.categorySelect, 'change', () => {
+      this.choice.categoryId = view.categorySelect.value;
+    });
+    this.listenView(view.startButton, 'click', event => {
+      event.preventDefault();
+      if (event.detail > 1) return;
+      this.startActivity();
+    });
+    this.updateCheckButton();
+  };
+
+  ConcordancesPapiJo.prototype.startActivity = function () {
+    if (!this.learnerChoice || this.selectionSession || !this.setupElements || this.startProcessing) return;
+    if (!['dropdown', 'typed'].includes(this.choice.mode) ||
+      !stateModel.choiceCategories(this.params.activity).some(category => category.id === this.choice.categoryId)) return;
+    this.startProcessing = true;
+    try {
+      this.resolveChoiceBehaviour();
+      this.selectionSession = this.createAttemptSession();
+      this.selectionSession.selectCategory(this.choice.categoryId);
+      this.mountAttempt();
+      this.selectionElements.answerControl.focus();
+      this.trigger('resize');
+    }
+    finally { this.startProcessing = false; }
+  };
+
+  ConcordancesPapiJo.prototype.mountAttempt = function () {
+    this.disposeView();
+    const document = this.attemptHost.ownerDocument;
+    this.instruction.text(this.params.behaviour.answerMode === 'typed'
+      ? this.params.l10n.typedInstruction : this.params.l10n.foundationMessage);
+    this.selectionElements = renderer.renderSelectionControls(document, this.selectionSession, {
+      domId: this.domId, enableHints: this.params.behaviour.answerMode === 'typed' && this.params.behaviour.enableProgressiveHints, enableCategories: this.params.activity.enableCategories, categoryFinalized: this.learnerChoice, l10n: this.params.l10n
+    });
+    this.attemptHost.replaceChildren(this.selectionElements.element);
+    const {categorySelect, answerSelect} = this.selectionElements;
+    if (categorySelect) {
+      this.listenView(categorySelect, 'change', () => {
+        if (this.learnerChoice || this.selectionSession.categoryLocked) {
+          categorySelect.value = this.selectionSession.categoryId;
+          return;
+        }
+        const previous = this.selectionSession.displayedSetIndex;
+        this.selectionSession.selectCategory(categorySelect.value);
+        this.refreshSelection(previous !== this.selectionSession.displayedSetIndex);
+        this.trigger('resize');
+      });
+    }
+    if (this.params.behaviour.answerMode === 'typed') {
+      this.listenView(answerSelect, 'input', () => {
+        this.selectionSession.setTypedAnswer(answerSelect.value);
+        this.refreshSelection();
+      });
+      this.listenView(answerSelect, 'compositionstart', () => { this.answerComposing = true; });
+      this.listenView(answerSelect, 'compositionend', () => { this.answerComposing = false; });
+      this.listenView(answerSelect, 'keydown', (event) => {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        if (event.repeat || event.isComposing || event.keyCode === 229 || this.answerComposing) return;
+        this.checkAnswer();
+      });
+    }
+    else this.listenView(answerSelect, 'change', () => {
+      this.selectionSession.selectAnswer(answerSelect.value);
+      this.refreshSelection();
+    });
+    this.refreshSelection();
+  };
+
   /** Refresh descriptions/input state without reshuffling or rebuilding controls. */
   ConcordancesPapiJo.prototype.refreshSelection = function (focusAnswer = false) {
     if (!this.selectionSession || !this.selectionElements) return;
@@ -277,7 +426,7 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
     const controls = this.selectionElements;
     if (controls.categorySelect) {
       controls.categorySelect.value = session.categoryId;
-      controls.categorySelect.disabled = session.categoryLocked;
+      controls.categorySelect.disabled = this.learnerChoice || session.categoryLocked;
       const category = session.categories.find((entry) => entry.id === session.categoryId);
       controls.categorySummary.textContent = this.params.l10n.selectedCategory.replace(/@category\b/g,
         () => renderer.categoryLabel(category, this.params.l10n));
@@ -322,7 +471,7 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
     }
     // Refresh/reattachment/category restoration never announces historical feedback.
     controls.announcement.textContent = '';
-    this.instruction[0].hidden = this.resultsPageVisible;
+    this.instruction[0].hidden = this.resultsPageVisible || this.learnerChoice;
     controls.exercise.hidden = this.resultsPageVisible;
     controls.resultsHost.hidden = !this.resultsPageVisible;
     controls.sequenceEnd.textContent = this.resultsPageVisible ? this.params.l10n.sequenceEnd : '';
@@ -340,7 +489,9 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
 
   /** Release layout observation when a host disposes of this activity. */
   ConcordancesPapiJo.prototype.destroy = function () {
-    this.kwicLayout?.disconnect();
+    this.destroyed = true;
+    this.stopWatchingButtons();
+    this.disposeView();
   };
 
   /** Derived feedback only: no persisted exhaustion flag or changes to checking. */
@@ -362,7 +513,7 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
   ConcordancesPapiJo.prototype.requestHint = function () {
     if (this.checkFailed || this.checkProcessing || this.retryProcessing || this.navigationProcessing ||
       !this.selectionSession?.requestHint()) return;
-    this.refreshHintControl();
+    this.updateCheckButton();
     this.selectionElements.answerControl.focus();
     this.selectionElements.announcement.textContent = this.selectionElements.hintReveal.textContent + ' ' + this.params.l10n.hintDescription;
     this.trigger('resize');
@@ -382,46 +533,53 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
     const reveal = this.selectionElements.hintReveal;
     reveal.hidden = !pattern;
     reveal.textContent = pattern ? this.params.l10n.hintRevealed.replace(/@hint\b/g, () => pattern) : '';
-    if (this.hintButton) {
-      this.hintButton.disabled = availability !== 'available';
-      this.hintButton.setAttribute('aria-disabled', String(availability !== 'available'));
-      this.hintButton.setAttribute('aria-describedby', status.id);
-    }
-    if (availability !== 'hidden') this.showButton('letter-hint');
-    else this.hideButton('letter-hint');
   };
 
-  ConcordancesPapiJo.prototype.updateCheckButton = function () {
-    if (!this.selectionSession) return;
-    this.refreshHintControl();
-    if (this.resultsPageVisible) {
-      this.hideButton('check-answer');
-      this.hideButton('next-set');
-      this.hideButton('view-results');
-      if (this.hintButton) this.hideButton('letter-hint');
-    }
-    else {
-      this.showButton('check-answer');
-      if (this.selectionSession?.allSolved && !this.checkProcessing && !this.retryProcessing && !this.checkFailed) this.showButton('view-results');
-      else this.hideButton('view-results');
-    }
-    const disabled = Boolean(this.checkFailed || this.checkProcessing || this.retryProcessing || !this.selectionSession?.canCheck());
+  /** Pure button DOM synchronization: never request Question visibility here. */
+  ConcordancesPapiJo.prototype.synchronizeButtonStates = function () {
+    if (this.destroyed) return;
+    this.syncQuestionButtons();
+    const session = this.selectionSession;
     if (this.checkButton) {
+      const disabled = Boolean(this.checkFailed || this.checkProcessing || this.retryProcessing || !session?.canCheck());
       this.checkButton.disabled = disabled;
       this.checkButton.setAttribute('aria-disabled', String(disabled));
     }
     if (this.nextButton) {
-      const session = this.selectionSession;
-      const nextDisabled = Boolean(this.checkFailed || this.checkProcessing || this.retryProcessing || this.navigationProcessing || !session?.canAdvance());
-      this.nextButton.disabled = nextDisabled;
-      this.nextButton.setAttribute('aria-disabled', String(nextDisabled));
-      if (this.resultsPageVisible || session.currentPosition >= session.eligibleSetIndices.length - 1) this.hideButton('next-set');
-      else this.showButton('next-set');
+      const disabled = Boolean(this.checkFailed || this.checkProcessing || this.retryProcessing || this.navigationProcessing || !session?.canAdvance());
+      this.nextButton.disabled = disabled;
+      this.nextButton.setAttribute('aria-disabled', String(disabled));
     }
-    if (this.params.behaviour.enableRetry && this.selectionSession) {
-      if (this.canRetry()) this.showButton('try-again');
-      else this.hideButton('try-again');
+    if (this.hintButton) {
+      const disabled = this.getHintAvailability() !== 'available';
+      this.hintButton.disabled = disabled;
+      this.hintButton.setAttribute('aria-disabled', String(disabled));
+      const status = this.selectionElements?.hintStatus;
+      if (status) this.hintButton.setAttribute('aria-describedby', status.id);
     }
+  };
+
+  /** Visibility derives from activity state, including when buttons are detached. */
+  ConcordancesPapiJo.prototype.updateButtonVisibility = function () {
+    if (!this.attemptHost || this.destroyed) return;
+    const session = this.selectionSession;
+    const exercise = Boolean(session && !this.resultsPageVisible);
+    const visible = (id, show) => show ? this.showButton(id) : this.hideButton(id);
+    visible('check-answer', exercise);
+    visible('next-set', exercise && session.currentPosition < session.eligibleSetIndices.length - 1);
+    visible('view-results', exercise && session.allSolved && !this.checkProcessing && !this.retryProcessing && !this.checkFailed);
+    if (this.params.behaviour.enableProgressiveHints && (this.learnerChoice || this.params.behaviour.answerMode === 'typed')) {
+      visible('letter-hint', exercise && this.selectionElements?.hintStatus && this.getHintAvailability() !== 'hidden');
+    }
+    if (this.params.behaviour.enableRetry) visible('try-again', this.canRetry());
+  };
+
+  /** Normal activity transitions refresh feedback, states and Question visibility. */
+  ConcordancesPapiJo.prototype.updateCheckButton = function () {
+    if (this.destroyed) return;
+    this.refreshHintControl();
+    this.synchronizeButtonStates();
+    this.updateButtonVisibility();
   };
 
   ConcordancesPapiJo.prototype.canRetry = function () {
@@ -431,6 +589,15 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
 
   /** Internal reset implementation, independent of button availability/focus. */
   ConcordancesPapiJo.prototype._resetAttempt = function () {
+    if (this.learnerChoice && this.attemptHost) {
+      this.selectionSession = null;
+      this.completionEmitted = false;
+      this.checkFailed = this.checkProcessing = this.navigationProcessing = this.answerComposing = false;
+      this.resultsPageVisible = false;
+      this.resultsView = null;
+      this.showChoice();
+      return true;
+    }
     if (!this.selectionSession || !this.selectionElements) return false;
     const fresh = sessionModel.createSelectionSession(this.params.activity, undefined, null, this.params.behaviour.answerMode, this.params.behaviour.typedPenalty, this.params.behaviour.spellingErrorBehaviour, this.params.behaviour.freeSpellingWarnings, this.params.behaviour.enableProgressiveHints);
     this.selectionSession = fresh;
@@ -465,7 +632,7 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
     try {
       if (this._resetAttempt()) {
         const controls = this.selectionElements;
-        (controls.categorySelect || controls.answerControl).focus();
+        (this.learnerChoice ? this.setupElements.modeSelect : controls.categorySelect || controls.answerControl).focus();
         this.trigger('resize');
       }
     }
@@ -571,7 +738,12 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
   };
 
   ConcordancesPapiJo.prototype.getMaxScore = function () {
-    return this.selectionSession?.getMaxScore() ?? 0;
+    if (this.selectionSession) return this.selectionSession.getMaxScore();
+    if (!this.learnerChoice || utilities.validateSets(this.params.activity.sets).length) return 0;
+    const category = stateModel.choiceCategories(this.params.activity).find(entry => entry.id === this.choice.categoryId);
+    if (!category) return 0;
+    return 2 * this.params.activity.sets.filter(set => category.type === 'all' ||
+      utilities.normalizeWord(set.category) === (category.type === 'named' ? category.key : '')).length;
   };
 
   /** The selected-category activity is answered once the selected sequence is solved. */
@@ -581,6 +753,8 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
 
   /** Serialize the current live attempt, including restored interaction state. */
   ConcordancesPapiJo.prototype.getCurrentState = function () {
+    if (this.learnerChoice) return stateModel.createLearnerState(this.params.activity, this.authoredBehaviour,
+      this.choice, this.selectionSession, this.resultsPageVisible);
     return stateModel.createState(this.params.activity, this.selectionSession, this.resultsPageVisible);
   };
 

@@ -2,8 +2,8 @@
 
 A standalone H5P concordance activity. Authors paste lines containing a target
 Word; learners identify the automatically hidden word using a dropdown or typed input.
-Source declarations are **1.1.4**, requiring **H5P Core API 1.28**.
-The current published release is 1.1.3. Version 1.1.4 is approved for release, exposing the Retry authoring option and adding a dedicated Results page.
+Source declarations are **1.1.5**, requiring **H5P Core API 1.28**.
+The current published release is 1.1.4. Version 1.1.5 is approved for release, adding learner-selected answer mode and a compact learner interface.
 See the [release notes](RELEASE-NOTES.md).
 
 After the final correct answer, View results opens the dedicated Results page.
@@ -38,7 +38,7 @@ not invalidate typed attempts. Completed restoration does not replay xAPI comple
 Phases 2B and 2C have passed user-reported local Firefox acceptance, including
 Set order placement in Behavioural settings. The exact 1.1.0 package has also
 passed independent WordPress installation and Firefox acceptance. This does not
-establish fractional My Results support. Source declarations are now 1.1.4;
+establish fractional My Results support. Source declarations are now 1.1.5;
 the published 1.1.0, 1.1.1 and 1.1.2 packages remain unchanged. See the
 [restoration checkpoint report](docs/typed-state-checkpoint.md).
 
@@ -233,12 +233,44 @@ H5PEditor.VerticalTabs 1.3 and H5PEditor.ShowWhenpapijo 1.0. No custom widget, n
 dependency or build step is required. The approved [MIT LICENSE](LICENSE) and
 Papi Jo author metadata are retained.
 
+## Learner-selected answer mode (1.1.5)
+
+Authors may choose **Allow the learner to select the answer mode** alongside the
+existing fixed modes. The learner chooses **Select word** or **Type word**, optionally
+chooses a category, and selects **Start**. These native selectors share a compact row
+with responsive wrapping. They are removed from the exercise layout after Start;
+mode and category remain fixed for the attempt. Fixed-mode activities start as before.
+Typed penalty, spelling warnings and progressive hints are configurable for both
+Typed and learner-choice authoring, and apply only when the learner chooses Type word.
+
+Before Start no session or shuffled sequence is created. The parent receives zero
+score, unanswered status and the maximum for the selected category. After Start the
+existing scoring, completion, xAPI and dedicated Results flow apply unchanged.
+Retry returns learner-choice activities to selection with the previous mode/category
+as editable defaults. Parent reset does the same independently of Retry availability,
+without moving focus. Explicit Start focuses the answer control; Retry focuses mode
+selection. Restoration does not move focus.
+
+Learner-choice saved state uses a version-1 `learner-answer-mode` outer envelope
+containing stage, mode, stable category identity, content fingerprint and an optional
+nested attempt. The existing attempt schemas, including schema-5 hints and
+`resultsPageVisible`, remain unchanged. Selection, partial attempts and both completed
+presentation stages restore. Valid legacy fixed-mode attempts can resume in learner
+choice using their saved mode; legacy completed snapshots open Results. Fixed-mode
+activities reject learner-choice envelopes and start fresh. Invalid or incompatible
+learner-choice state returns to selection. Content and typed-setting compatibility
+continues to use the existing mode-specific fingerprints. Older runtimes cannot
+restore the new outer envelope.
+
 ## Installation and verification
 
-Published releases through 1.1.3 and all historical release directories are preserved.
-Version 1.1.4 passed automated, H5P CLI and user-reported WordPress acceptance,
-including InteractiveBookPapiJo integration. Publication authorization is pending.
-Learner-selectable play mode remains ON HOLD.
+Published releases through 1.1.4 and all historical release directories are preserved.
+Version 1.1.5 passed all 147 automated regression tests and maintainer-reported
+H5P CLI and WordPress standalone acceptance, including saved-state restoration,
+parent activity integration and theme compatibility. The compact learner interface
+and button lifecycle fixes are accepted. The earlier CLI Reset Session observation
+was not established as a library defect; WordPress restoration acceptance passed.
+Version 1.1.5 is approved for release; tag creation and publication await authorization.
 
 The accepted 1.1.0 archive's exact filename,
 hash and installation qualifications are in the [release record](docs/release-1.1.0.md).

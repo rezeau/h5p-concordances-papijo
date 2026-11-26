@@ -4,7 +4,7 @@
   "description": "Standalone concordance activity with automatic gaps, category filtering, partial scoring, results, Retry, saved-state restoration and xAPI completion.",
   "majorVersion": 1,
   "minorVersion": 1,
-  "patchVersion": 4,
+  "patchVersion": 5,
   "runnable": 1,
   "author": "Papi Jo",
   "license": "MIT",

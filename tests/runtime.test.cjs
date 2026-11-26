@@ -13,6 +13,22 @@ const semantics = JSON.parse(fs.readFileSync(path.join(root, 'semantics.json'), 
 
 function createHarness(randomDraw = () => 0.999999) {
   const document = createDocument();
+  const buttonObservers = [];
+  class MutationObserver {
+    constructor(callback) { this.callback = callback; buttonObservers.push(this); }
+    observe(target) { this.target = target; this.active = true; }
+    disconnect() { this.active = false; }
+  }
+  document.onChildListChange = target => {
+    for (const observer of buttonObservers) {
+      if (!observer.active || !observer.target.contains(target) || observer.queued) continue;
+      observer.queued = true;
+      Promise.resolve().then(() => {
+        observer.queued = false;
+        if (observer.active) observer.callback();
+      });
+    }
+  };
   class TextElement {
     constructor(tag, attributes) {
       this[0] = document.createElement(tag.replace(/[<>]/g, ''));
@@ -45,6 +61,9 @@ function createHarness(randomDraw = () => 0.999999) {
     this.events = [];
     this.listeners = new Map();
     this.sections = {};
+    this.questionContainer = document.createElement('div');
+    this.buttonBar = document.createElement('div');
+    this.questionContainer.appendChild(this.buttonBar);
     this.contentRegistrations = 0;
     this.on = (name, handler) => {
       if (!this.listeners.has(name)) this.listeners.set(name, []);
@@ -70,6 +89,7 @@ function createHarness(randomDraw = () => 0.999999) {
     };
     this.setContent = (content) => {
       this.sections.content = content;
+      this.questionContainer.appendChild(content[0]);
       this.contentRegistrations++;
     };
     this.setIntroduction = (introduction) => {
@@ -78,31 +98,86 @@ function createHarness(randomDraw = () => 0.999999) {
     this.buttons = {};
     this.addButton = (id, label, callback, visible, options) => {
       const button = document.createElement('button');
-      button.disabled = options.disabled;
+      button.disabled = options.disabled ?? false;
       button.hidden = visible === false;
       button.setAttribute('aria-label', options['aria-label']);
-      this.buttons[id] = {element: button, callback, label};
-      if (id === 'check-answer') this.checkButton = button;
-      if (id === 'letter-hint') this.hintButton = button;
-      if (id === 'next-set') this.nextButton = button;
+      button.className = options.classes || '';
+      this.buttons[id] = {element: button, callback, label, isVisible: visible !== false};
+      button.addEventListener('click', callback);
+      if (!button.hidden) this.buttonBar.appendChild(button);
     };
-    this.showButton = (id) => { this.buttons[id].element.hidden = false; };
-    this.hideButton = (id) => { this.buttons[id].element.hidden = true; };
+    // Question keeps visibility state separately from DOM attachment and queue intent.
+    const pendingShows = new Map(), pendingHides = new Map();
+    this.visibilityCalls = [];
+    let toggleQueued = false;
+    const attached = id => this.domRegistered && this.buttons[id].element.parentNode === this.buttonBar;
+    const detach = id => {
+      const entry = this.buttons[id];
+      if (entry.element.parentNode) entry.element.parentNode.removeChild(entry.element);
+      entry.isVisible = false;
+    };
+    this.flushButtonInsertions = () => {
+      toggleQueued = false;
+      for (const id of pendingShows.keys()) {
+        const entry = this.buttons[id];
+        if (entry.element.parentNode !== this.buttonBar) this.buttonBar.appendChild(entry.element);
+        entry.isVisible = true;
+      }
+      pendingShows.clear();
+      for (const id of pendingHides.keys()) detach(id);
+      pendingHides.clear();
+    };
+    const scheduleToggle = () => {
+      if (toggleQueued) return;
+      toggleQueued = true;
+      Promise.resolve().then(this.flushButtonInsertions);
+    };
+    this.showButton = (id, priority = 0) => {
+      this.visibilityCalls.push(['show', id]);
+      const entry = this.buttons[id];
+      if (!entry || entry.isVisible && !pendingHides.has(id)) return;
+      if (pendingShows.has(id)) {
+        pendingShows.set(id, Math.max(priority, pendingShows.get(id))); return;
+      }
+      if (pendingHides.has(id)) {
+        if (pendingHides.get(id) <= priority) {
+          pendingHides.delete(id); pendingShows.set(id, priority); entry.element.hidden = false;
+        }
+      }
+      else if (!attached(id)) { pendingShows.set(id, priority); entry.element.hidden = false; }
+      scheduleToggle();
+    };
+    this.hideButton = (id, priority = 0) => {
+      this.visibilityCalls.push(['hide', id]);
+      const entry = this.buttons[id];
+      if (!entry || !entry.isVisible && !pendingShows.has(id)) return;
+      if (pendingHides.has(id)) {
+        pendingHides.set(id, Math.max(priority, pendingHides.get(id))); return;
+      }
+      if (pendingShows.has(id)) {
+        if (pendingShows.get(id) <= priority) {
+          pendingShows.delete(id); pendingHides.set(id, priority); entry.element.hidden = true;
+        }
+      }
+      else if (!attached(id)) { detach(id); entry.element.hidden = true; }
+      else { pendingHides.set(id, priority); entry.element.hidden = true; }
+      scheduleToggle();
+    };
     this.attach = () => {
       this.registerDomElements();
-      this.trigger('domChanged', { library: 'H5P.ConcordancesPapiJo' });
+      this.trigger('domChanged', { library: 'H5P.ConcordancesPapiJo', $target: [this.questionContainer] });
     };
   }
 
   const H5P = { Question, jQuery: (tag, attributes) => new TextElement(tag, attributes) };
   const random = Object.create(Math);
   random.random = randomDraw;
-  const context = vm.createContext({ H5P, Math: random });
+  const context = vm.createContext({ H5P, Math: random, MutationObserver });
   for (const file of ['concordances-utils.js', 'concordances-session.js', 'concordances-state.js', 'concordances-renderer.js']) {
     vm.runInContext(fs.readFileSync(path.join(root, 'scripts', file), 'utf8'), context, {filename: file});
   }
   vm.runInContext(source, context, { filename: 'h5p-concordances-papijo.js' });
-  return { H5P, document, Constructor: H5P.ConcordancesPapiJo };
+  return { H5P, document, buttonObservers, Constructor: H5P.ConcordancesPapiJo };
 }
 
 function flattenText(element) {
@@ -927,4 +1002,318 @@ test('dedicated Results preserves completion, both saved stages, legacy restorat
     assert.equal(instance.resultsPageVisible, false); assert.equal(controls.exercise.hidden, false);
     assert.equal(instance.resultsView, null); assert.equal(instance.getAnswerGiven(), false);
   }
+});
+
+
+function chooseMode(instance, mode, category = 'all') {
+  const setup = instance.setupElements;
+  setup.modeSelect.value = mode; setup.modeSelect.dispatchEvent({type: 'change'});
+  if (setup.categorySelect) {
+    setup.categorySelect.value = category; setup.categorySelect.dispatchEvent({type: 'change'});
+  }
+}
+
+test('learner Start resolves both modes, preserves typed settings, reports completion and returns to compact choices', async () => {
+  for (const mode of ['dropdown', 'typed']) {
+    let draws = 0;
+    const {Constructor, document} = createHarness(() => { draws++; return 0.999999; });
+    const params = {activity: {enableCategories: mode === 'typed', sets: [
+      {word: 'fresco', context: 'FRESCO', category: 'A'}, {word: 'Other', context: 'OTHER', category: 'B'}
+    ]}, behaviour: {answerMode: 'learner', typedPenalty: '0.5', spellingErrorBehaviour: 'warn',
+      freeSpellingWarnings: '1', enableProgressiveHints: true}};
+    const original = JSON.stringify(params), instance = new Constructor(params);
+    assert.equal(instance.getMaxScore(), 4); instance.attach();
+    assert.equal(draws, 0); assert.equal(instance.selectionSession, null);
+    assert.equal(instance.getScore(), 0); assert.equal(instance.getAnswerGiven(), false);
+    assert.equal(instance.setupElements.modeSelect.value, 'dropdown');
+    assert.deepEqual(instance.setupElements.modeSelect.children.map(n => n.textContent), ['Select word', 'Type word']);
+    chooseMode(instance, mode, mode === 'typed' ? 'category-0' : 'all');
+    assert.equal(instance.getMaxScore(), mode === 'typed' ? 2 : 4);
+    const savedSelection = JSON.parse(JSON.stringify(instance.getCurrentState()));
+    const restoredSelection = new Constructor(params, 1, {previousState: savedSelection}); restoredSelection.attach();
+    assert.equal(restoredSelection.setupElements.modeSelect.value, mode);
+    assert.equal(restoredSelection.getMaxScore(), instance.getMaxScore());
+    assert.equal(draws, 0);
+    const oldSetup = instance.setupElements;
+    oldSetup.startButton.dispatchEvent({type: 'click', detail: 1, preventDefault() {}});
+    const session = instance.selectionSession, drawCount = draws;
+    instance.startActivity(); oldSetup.startButton.dispatchEvent({type: 'click', detail: 2, preventDefault() {}});
+    assert.equal(draws, drawCount); assert.equal(instance.selectionSession, session);
+    assert.equal(oldSetup.element.parentNode, null); assert.equal(instance.setupElements, null);
+    assert.equal(document.activeElement, instance.selectionElements.answerControl);
+    assert.equal(session.answerMode, mode);
+    oldSetup.modeSelect.value = mode === 'typed' ? 'dropdown' : 'typed';
+    oldSetup.modeSelect.dispatchEvent({type: 'change'}); assert.equal(instance.choice.mode, mode);
+    const controls = instance.selectionElements;
+    if (mode === 'typed') {
+      assert.equal(session.typedPenalty, 0.5); assert.equal(session.spellingPolicy, 'warn');
+      assert.equal(session.warningAllowance, 1); assert.equal(session.progressiveHints, true);
+      assert.equal(controls.categorySelect.parentNode, null);
+      assert.equal(controls.categorySummary.textContent, 'Category: A');
+      controls.categorySelect.value = 'all'; controls.categorySelect.dispatchEvent({type: 'change'});
+      assert.equal(session.categoryId, 'category-0');
+      typeAnswer(instance, 'fresoc'); instance.checkAnswer();
+      assert.equal(session.getSetState().attempts, 0); assert.equal(session.getSetState().warningCount, 1);
+      typeAnswer(instance, 'wrong'); instance.checkAnswer(); instance.requestHint();
+      assert.equal(session.getSetState().hintCount, 1);
+      const partial = JSON.parse(JSON.stringify(instance.getCurrentState()));
+      assert.equal(partial.attemptState.version, 5);
+      const resumed = new Constructor(params, 1, {previousState: partial}); resumed.attach();
+      assert.equal(resumed.selectionSession.getSetState().hintCount, 1);
+      assert.equal(resumed.selectionSession.getSetState().warningCount, 1);
+      typeAnswer(instance, 'fresco'); instance.checkAnswer(); assert.equal(instance.getScore(), 1);
+    }
+    else {
+      assert.equal(session.spellingPolicy, 'mistake'); assert.equal(controls.hintStatus, null);
+      await solveAttempt(instance);
+    }
+    assert.equal(instance.getAnswerGiven(), true); assert.equal(completedStatements(instance).length, 1);
+    assert.equal(instance.resultsPageVisible, false);
+    for (const page of [false, true]) {
+      if (page) instance.viewResults();
+      const saved = JSON.parse(JSON.stringify(instance.getCurrentState()));
+      const quiet = createHarness(() => { throw new Error('No restoration shuffle'); });
+      const restored = new quiet.Constructor(params, 1, {previousState: saved}); restored.attach();
+      assert.equal(restored.resultsPageVisible, page); assert.equal(restored.getAnswerGiven(), true);
+      assert.equal(restored.getScore(), instance.getScore()); assert.equal(quiet.document.activeElement, undefined);
+      assert.equal(completedStatements(restored).length, 0);
+    }
+    assert.equal(completedStatements(instance).length, 1);
+    instance.retry(); assert.equal(instance.selectionSession, null);
+    assert.equal(instance.getAnswerGiven(), false); assert.equal(instance.resultsPageVisible, false);
+    assert.equal(instance.setupElements.modeSelect.value, mode);
+    assert.equal(document.activeElement, instance.setupElements.modeSelect);
+    controls.answerControl.dispatchEvent({type: mode === 'typed' ? 'input' : 'change'});
+    assert.equal(instance.selectionSession, null);
+    chooseMode(instance, mode === 'typed' ? 'dropdown' : 'typed'); instance.startActivity();
+    assert.equal(instance.selectionSession.answerMode, mode === 'typed' ? 'dropdown' : 'typed');
+    assert.equal(instance.selectionSession.getSetState().attempts, 0);
+    const outside = document.createElement('button'); outside.focus(); instance.resetTask();
+    assert.equal(instance.selectionSession, null); assert.equal(document.activeElement, outside);
+    assert.equal(JSON.stringify(params), original);
+  }
+});
+
+test('learner restoration accepts legacy fixed attempts, rejects invalid state, and parent reset ignores Retry setting', () => {
+  const {Constructor} = createHarness();
+  const activity = {sets: [{word: 'fresco', context: 'FRESCO'}]};
+  for (const mode of ['dropdown', 'typed']) {
+    const behaviour = {answerMode: mode, enableProgressiveHints: mode === 'typed', enableRetry: false};
+    const fixed = new Constructor({activity, behaviour}); fixed.attach();
+    if (mode === 'typed') { typeAnswer(fixed, 'fresco'); fixed.checkAnswer(); } else submitWord(fixed, 'fresco');
+    const legacy = JSON.parse(JSON.stringify(fixed.getCurrentState())); delete legacy.resultsPageVisible;
+    const params = {activity, behaviour: {...behaviour, answerMode: 'learner'}};
+    const selected = new Constructor(params, 1, {previousState: legacy}); selected.attach();
+    assert.equal(selected.selectionSession.answerMode, mode); assert.equal(selected.resultsPageVisible, true);
+    assert.equal(completedStatements(selected).length, 0); assert.equal(selected.buttons['try-again'], undefined);
+    const envelope = JSON.parse(JSON.stringify(selected.getCurrentState()));
+    const mismatch = new Constructor({activity, behaviour}, 1, {previousState: envelope}); mismatch.attach();
+    assert.equal(mismatch.getAnswerGiven(), false);
+    selected.retry(); assert.equal(selected.getAnswerGiven(), true);
+    selected.resetTask(); assert.equal(selected.selectionSession, null); assert.ok(selected.setupElements);
+    selected.resetTask(); assert.equal(selected.getScore(), 0);
+    const beforeAttach = new Constructor(params, 1, {previousState: envelope}); beforeAttach.resetTask(); beforeAttach.attach();
+    assert.ok(beforeAttach.setupElements); assert.equal(beforeAttach.selectionSession, null);
+    const invalid = new Constructor(params, 1, {previousState: {...envelope, mode: 'unknown'}}); invalid.attach();
+    assert.equal(invalid.selectionSession, null); assert.equal(invalid.setupElements.modeSelect.value, 'dropdown');
+  }
+});
+
+
+// Drain only the modeled insertion and observer microtasks; no wall-clock delays.
+async function flushQuestionLifecycle() {
+  await Promise.resolve(); await Promise.resolve();
+}
+
+test('button reinsertion regression: both learner modes synchronize Check after input before insertion', async () => {
+  for (const mode of ['dropdown', 'typed']) {
+    const {Constructor} = createHarness();
+    const instance = new Constructor({activity: {sets: [{word: 'One', context: 'ONE'}]},
+      behaviour: {answerMode: 'learner'}});
+    instance.attach();
+    const actual = instance.buttons['check-answer'].element;
+    assert.equal(actual.parentNode, null); assert.equal(actual.disabled, true);
+    chooseMode(instance, mode); instance.startActivity();
+    assert.equal(actual.parentNode, null);
+    if (mode === 'typed') typeAnswer(instance, 'One');
+    else {
+      const answer = instance.selectionElements.answerControl;
+      answer.value = String(instance.selectionSession.answers.indexOf('One'));
+      answer.dispatchEvent({type: 'change'});
+    }
+    assert.equal(instance.selectionSession.canCheck(), true);
+    await flushQuestionLifecycle();
+    assert.equal(actual.parentNode, instance.buttonBar);
+    assert.ok(instance.checkButton === actual, 'Check binds to the actual element');
+    assert.equal(actual.disabled, false); assert.equal(actual.getAttribute('aria-disabled'), 'false');
+    instance.buttons['check-answer'].callback();
+    assert.equal(actual.disabled, true); assert.equal(actual.getAttribute('aria-disabled'), 'true');
+    instance.viewResults(); await flushQuestionLifecycle();
+    assert.equal(actual.parentNode, null);
+    instance.retry(); await flushQuestionLifecycle();
+    assert.ok(instance.checkButton === actual, 'Check binds to the actual element'); // A detached but still owned reference is retained.
+    chooseMode(instance, mode); instance.startActivity(); await flushQuestionLifecycle();
+    assert.equal(actual.disabled, true);
+    if (mode === 'typed') {
+      typeAnswer(instance, 'One'); assert.equal(actual.disabled, false);
+      typeAnswer(instance, ' '); assert.equal(actual.disabled, true);
+    }
+    else {
+      const answer = instance.selectionElements.answerControl;
+      answer.value = String(instance.selectionSession.answers.indexOf('One')); answer.dispatchEvent({type: 'change'});
+      assert.equal(actual.disabled, false);
+      answer.value = ''; answer.dispatchEvent({type: 'change'}); assert.equal(actual.disabled, true);
+    }
+    const outside = instance.selectionElements.answerControl;
+    outside.focus(); instance.resetTask(); await flushQuestionLifecycle();
+    assert.ok(instance.checkButton === actual, 'Check binds to the actual element'); assert.equal(actual.parentNode, null);
+    assert.equal(instance.selectionSession, null);
+  }
+});
+
+test('button reinsertion regression: replacement, instance isolation, Hint, Next and observer disposal', async () => {
+  const {Constructor, document, buttonObservers} = createHarness();
+  const params = {activity: {sets: [{word: 'fresco', context: 'FRESCO'}, {word: 'Other', context: 'OTHER'}]},
+    behaviour: {answerMode: 'typed', enableProgressiveHints: true}};
+  const instance = new Constructor(params); instance.attach();
+  const other = new Constructor(params); other.attach();
+  typeAnswer(instance, 'wrong'); instance.checkAnswer();
+  typeAnswer(instance, 'wrong again'); instance.checkAnswer();
+  await flushQuestionLifecycle();
+  assert.equal(instance.hintButton, instance.buttons['letter-hint'].element);
+  assert.equal(instance.hintButton.disabled, false);
+  assert.equal(instance.hintButton.getAttribute('aria-disabled'), 'false');
+  assert.equal(other.hintButton?.disabled, true);
+  const oldCheck = instance.checkButton;
+  const replacement = document.createElement('button');
+  replacement.className = oldCheck.className; replacement.disabled = true;
+  instance.buttonBar.replaceChild(replacement, oldCheck);
+  instance.buttons['check-answer'].element = replacement;
+  typeAnswer(instance, 'fresco'); await flushQuestionLifecycle();
+  assert.ok(instance.checkButton === replacement, 'Check binds to replacement'); assert.equal(replacement.disabled, false);
+  instance.checkAnswer(); await flushQuestionLifecycle();
+  const next = instance.buttons['next-set'].element;
+  assert.equal(instance.nextButton, next); assert.equal(next.disabled, false);
+  assert.equal(next.getAttribute('aria-disabled'), 'false');
+  let prevented = false;
+  next.dispatchEvent({type: 'click', detail: 2, preventDefault() { prevented = true; }, stopImmediatePropagation() {}});
+  assert.equal(prevented, true);
+  instance.nextSet(); await flushQuestionLifecycle();
+  assert.equal(next.disabled, true);
+  assert.equal(replacement.disabled, true);
+  assert.equal(other.checkButton, other.buttons['check-answer'].element);
+  instance.trigger('domChanged', {library: 'H5P.ConcordancesPapiJo', $target: [other.questionContainer]});
+  assert.ok(instance.buttonRoot === instance.questionContainer, 'Ignore a different activity root');
+  const oldObserver = buttonObservers.find(observer => observer.target === instance.questionContainer);
+  assert.ok(oldObserver);
+  // A new attached root must invalidate the old observer, even if its callback was queued.
+  const newRoot = document.createElement('div');
+  newRoot.appendChild(instance.sections.content[0]); newRoot.appendChild(instance.buttonBar);
+  instance.questionContainer = newRoot; instance.attach();
+  assert.equal(oldObserver.active, false);
+  const currentObserver = buttonObservers.find(observer => observer.active && observer.target === newRoot);
+  assert.ok(currentObserver);
+  oldObserver.callback(); assert.ok(instance.checkButton === replacement, 'Check binds to replacement');
+  instance.destroy();
+  assert.equal(currentObserver.active, false);
+  const events = instance.events.length;
+  currentObserver.callback(); oldObserver.callback();
+  await flushQuestionLifecycle();
+  assert.equal(instance.events.length, events);
+  assert.equal(instance.buttonObserver, null);
+});
+
+
+test('Start uses the optional theme button factory with safe localization and preserves the legacy fallback', () => {
+  for (const themed of [false, true]) {
+    const {Constructor, H5P, document} = createHarness();
+    let options, created;
+    if (themed) H5P.Components = {Button(settings) {
+      options = settings;
+      created = document.createElement('button');
+      created.className = 'h5p-theme-button h5p-theme-primary-cta ' + settings.classes;
+      return created;
+    }};
+    const instance = new Constructor({activity: {sets: [{word: 'One', context: 'ONE'}]},
+      behaviour: {answerMode: 'learner'}, l10n: {start: 'Start <now> & go'}});
+    instance.attach();
+    const button = instance.setupElements.startButton;
+    assert.equal(button.getAttribute('type'), 'button');
+    if (themed) {
+      assert.ok(button === created);
+      assert.equal(options.label, 'Start &lt;now&gt; &amp; go');
+      assert.equal(options.ariaLabel, options.label);
+      assert.equal(options.buttonType, 'button');
+      assert.equal(button.className.includes('h5p-joubelui-button'), false);
+    }
+    else {
+      assert.equal(button.textContent, 'Start <now> & go');
+      assert.ok(button.className.includes('h5p-joubelui-button'));
+    }
+    button.dispatchEvent({type: 'click', detail: 1, preventDefault() {}});
+    assert.equal(instance.selectionSession.answerMode, 'dropdown');
+    assert.equal(document.activeElement, instance.selectionElements.answerControl);
+    instance.destroy();
+  }
+});
+
+
+test('Next visibility regression: three Sets through actual buttons in both learner modes, Retry and parent reset', async () => {
+  for (const mode of ['dropdown', 'typed']) {
+    const {Constructor, buttonObservers} = createHarness();
+    const instance = new Constructor({activity: {sets: [
+      {word: 'cat', context: 'CAT'}, {word: 'dog', context: 'DOG'}, {word: 'bird', context: 'BIRD'}
+    ]}, behaviour: {answerMode: 'learner'}});
+    instance.attach();
+    const click = async id => {
+      const button = instance.buttons[id].element;
+      assert.ok(button.parentNode === instance.buttonBar, id + ' must be attached');
+      assert.equal(button.disabled, false, id + ' must be enabled');
+      button.click(); await flushQuestionLifecycle();
+    };
+    const finish = async () => {
+      chooseMode(instance, mode); instance.setupElements.startButton.click(); await flushQuestionLifecycle();
+      for (let position = 0; position < 3; position++) {
+        assert.equal(instance.selectionSession.currentPosition, position);
+        const word = instance.params.activity.sets[instance.selectionSession.displayedSetIndex].word;
+        if (mode === 'typed') typeAnswer(instance, word);
+        else {
+          const answer = instance.selectionElements.answerControl;
+          answer.value = String(instance.selectionSession.answers.indexOf(word)); answer.dispatchEvent({type: 'change'});
+        }
+        await click('check-answer');
+        assert.equal(instance.selectionElements.feedback.textContent, 'Correct');
+        if (position < 2) await click('next-set');
+        else assert.equal(instance.buttons['next-set'].element.parentNode, null);
+      }
+      await click('view-results');
+      assert.equal(instance.resultsPageVisible, true);
+      assert.ok(instance.buttons['try-again'].element.parentNode === instance.buttonBar);
+    };
+    await finish();
+    await click('try-again'); await finish();
+    instance.resetTask(); await flushQuestionLifecycle(); await finish();
+    assert.equal(completedStatements(instance).length, 3);
+    const calls = instance.visibilityCalls.length;
+    const observer = buttonObservers.find(entry => entry.active && entry.target === instance.questionContainer);
+    // Force reacquisition so this tests the callback's changed-reference path.
+    instance.checkButton = null; instance.hintButton = null; instance.nextButton = null;
+    observer.callback(); await flushQuestionLifecycle();
+    assert.equal(instance.visibilityCalls.length, calls, 'Observer must not request visibility');
+    instance.destroy();
+  }
+});
+
+test('Question visibility double preserves priority and cancellation of queued show/hide requests', async () => {
+  const {Constructor} = createHarness();
+  const instance = new Constructor({activity: {sets: [{word: 'cat', context: 'CAT'}]}, behaviour: {answerMode: 'learner'}});
+  instance.attach(); await flushQuestionLifecycle();
+  const entry = instance.buttons['view-results'];
+  instance.showButton('view-results'); instance.hideButton('view-results'); await flushQuestionLifecycle();
+  assert.equal(entry.isVisible, false); assert.equal(entry.element.parentNode, null);
+  instance.showButton('view-results', 2); instance.hideButton('view-results', 1); await flushQuestionLifecycle();
+  assert.equal(entry.isVisible, true); assert.ok(entry.element.parentNode === instance.buttonBar);
+  instance.hideButton('view-results'); instance.showButton('view-results'); await flushQuestionLifecycle();
+  assert.equal(entry.isVisible, true); assert.ok(entry.element.parentNode === instance.buttonBar);
+  instance.destroy();
 });

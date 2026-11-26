@@ -291,3 +291,40 @@ test('page metadata rejects unfinished Results, accessors and nested hint flags'
     }
   }
 });
+
+
+test('learner envelope validates selection, category identity, mode domains and malformed stages without changing fixed snapshots', () => {
+  const activity = {enableCategories: true, sets: [
+    {word: 'fresco', context: 'FRESCO', category: 'A'}, {word: 'Other', context: 'OTHER', category: 'B'}]};
+  const authored = {answerMode: 'learner', typedPenalty: '0.5', spellingErrorBehaviour: 'warn',
+    freeSpellingWarnings: '3', enableProgressiveHints: true};
+  const choice = {mode: 'typed', categoryId: 'category-0'};
+  const selection = stateModel.createLearnerState(activity, authored, choice, null, false);
+  const saved = clone(selection);
+  const restored = stateModel.restoreLearnerState(activity, authored, freeze(saved));
+  assert.deepEqual(restored.choice, choice); assert.equal(restored.session, null);
+  assert.deepEqual(saved, selection);
+  const effective = stateModel.effectiveBehaviour(authored, choice.mode);
+  assert.equal(effective.typedPenalty, 0.5); assert.equal(effective.freeSpellingWarnings, 3);
+  const session = model.createSelectionSession(activity, keepOrder, null, 'typed', 0.5, 'warn', 3, true);
+  session.selectCategory(choice.categoryId); session.setTypedAnswer('partial');
+  const active = stateModel.createLearnerState(activity, authored, choice, session, false);
+  assert.equal(active.attemptState.version, 5);
+  assert.equal(stateModel.validateState(activity, active, effective).valid, false);
+  const reordered = {...activity, sets: activity.sets.slice().reverse()};
+  const resumed = stateModel.restoreLearnerState(reordered, authored, active);
+  assert.equal(resumed.session.getSetState().typedText, 'partial');
+  assert.equal(resumed.choice.categoryId, 'category-1');
+  for (const invalid of [
+    {...selection, mode: 'unknown'}, {...selection, version: 2}, {...selection, extra: true},
+    {...selection, category: ['named', 'missing']}, {...selection, fingerprint: 'changed'},
+    {...selection, stage: 'attempt'}, {...selection, attemptState: active.attemptState},
+    {...active, mode: 'dropdown'}, {...active, category: ['all']},
+    {...active, attemptState: {...active.attemptState, resultsPageVisible: true}}
+  ]) assert.equal(stateModel.restoreLearnerState(activity, authored, invalid), null);
+  const accessor = {...selection};
+  Object.defineProperty(accessor, 'mode', {enumerable: true, get() { throw new Error('Do not execute'); }});
+  assert.equal(stateModel.restoreLearnerState(activity, authored, accessor), null);
+  assert.equal(stateModel.restoreLearnerState(activity, {...authored, typedPenalty: '1'}, active), null);
+  assert.equal(stateModel.restoreLearnerState({...activity, sets: [{word: 'Changed', context: 'CHANGED'}]}, authored, active), null);
+});

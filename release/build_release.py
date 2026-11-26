@@ -33,7 +33,7 @@ def release_plan(root, version):
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--libraries', type=Path, required=True, help='Read-only directory of installed H5P dependency libraries')
-parser.add_argument('--version', default='1.1.4', help='Release version; must match source declarations (default: 1.1.4)')
+parser.add_argument('--version', default='1.1.5', help='Release version; must match source declarations (default: 1.1.5)')
 args = parser.parse_args()
 LIBRARIES = args.libraries.resolve()
 main, OUTPUT, STAGE, PACKAGE = release_plan(ROOT, args.version)

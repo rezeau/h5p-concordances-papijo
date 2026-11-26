@@ -157,3 +157,40 @@ strong.h5p-concordances-papijo-revealed-word {
   color: var(--h5p-theme-feedback-incorrect-main, #a13236);
 }
 /* Omission underscores share the theme-aware spelling-error treatment. */
+
+
+/* Compact choices wrap in narrow parent activities without shrinking controls. */
+.h5p-concordances-papijo-choice-row,
+.h5p-concordances-papijo-inline-choice,
+.h5p-concordances-papijo-category-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.h5p-concordances-papijo-choice-row { gap: 0.5rem 1rem; }
+.h5p-concordances-papijo-inline-choice { max-width: 100%; }
+.h5p-concordances-papijo-choice-row .h5p-concordances-papijo-select,
+.h5p-concordances-papijo-category-row .h5p-concordances-papijo-select {
+  width: auto;
+  max-width: 100%;
+}
+.h5p-concordances-papijo-category-row .h5p-concordances-papijo-control-label,
+.h5p-concordances-papijo-choice-row .h5p-concordances-papijo-start { margin: 0; }
+.h5p-concordances-papijo-category-summary,
+.h5p-concordances-papijo-progress { margin-block: 0.25rem; }
+
+.h5p-concordances-papijo-answer-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.h5p-concordances-papijo-answer-row .h5p-concordances-papijo-control-label { margin: 0; }
+.h5p-concordances-papijo-answer-row .h5p-concordances-papijo-select,
+.h5p-concordances-papijo-answer-row .h5p-concordances-papijo-input {
+  flex: 1 1 12rem;
+  width: auto;
+}

@@ -1,3 +1,41 @@
+# H5P.ConcordancesPapiJo 1.1.5 — approved for release
+
+- Adds learner-choice answer mode alongside the unchanged fixed dropdown and typed modes.
+- Compact native Select word / Type word and optional category selectors share a
+  wrapping row with Start. Start finalizes both selections and removes setup controls.
+- Typed scoring penalty, spelling warnings and hints retain authored settings and
+  apply only to typed attempts. Session/scoring/hint algorithms are unchanged.
+- Retry and parent reset return to selection with editable previous defaults;
+  parent reset remains independent of Retry and does not move focus.
+- Version-1 learner-answer-mode envelopes preserve selection and active attempts,
+  nesting existing schemas, schema-5 hints and Results-page visibility unchanged.
+  Fully validated legacy fixed-mode attempts resume in their saved mode; invalid
+  states return to selection. Fixed modes reject learner-choice envelopes.
+- Completion and xAPI remain tied to final correct submission, not Results navigation.
+- Fixes the reproduced inactive Check-button lifecycle failure after learner Start:
+  instance-scoped child-list observation acquires reinserted/replaced Question buttons,
+  retains owned detached references and synchronizes Check, Hint and Next disabled/ARIA
+  states. Observers disconnect on root replacement and activity destruction; stale
+  callbacks are ignored. No timing delays, scoring or saved-state changes are involved.
+- Corrects missing Next after learner Start by deriving every Question button's
+  visibility from activity state independently of DOM references. MutationObserver
+  callbacks only acquire references and synchronize disabled/ARIA state; activity
+  transitions alone request visibility. Three-Set learner regressions exercise the
+  actual buttons across Retry and parent reset with Question-style visibility queues.
+
+- Start uses the API 1.28 theme-aware button factory when available, including
+  custom H5P themes, with a legacy fallback. Compact layout and keyboard focus
+  are preserved without hardcoded theme styling.
+
+All 147 automated regression tests and maintainer-reported H5P CLI and WordPress
+standalone acceptance passed, including saved-state restoration, parent activity
+integration and theme compatibility. The compact interface, Check/Next lifecycle
+fixes and themed Start button are accepted. The corrected package is approved for
+release; tag creation and GitHub publication await authorization.
+
+
+---
+
 # H5P.ConcordancesPapiJo 1.1.4 — approved for release
 
 - Exposes Enable "Retry" button in Behavioural settings, enabled by default.

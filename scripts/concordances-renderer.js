@@ -321,7 +321,37 @@
     });
   }
 
-  /** Native selection controls are created once; Retry refreshes only their options. */
+  /** Compact pre-start controls; no session, concordances or answer input exist yet. */
+  function renderModeChoice(document, options) {
+    const container = element(document, 'div', 'h5p-concordances-papijo-choice-row');
+    const addSelect = (name, labelText, choices, value) => {
+      const label = element(document, 'label', 'h5p-concordances-papijo-inline-choice');
+      label.appendChild(element(document, 'span', '', labelText));
+      const select = element(document, 'select', 'h5p-concordances-papijo-select');
+      select.id = options.domId + '-choose-' + name;
+      label.setAttribute('for', select.id);
+      choices.forEach(([id, text]) => {
+        const option = element(document, 'option', '', text);
+        option.value = id;
+        select.appendChild(option);
+      });
+      select.value = value;
+      label.appendChild(select);
+      container.appendChild(label);
+      return select;
+    };
+    const modeSelect = addSelect('mode', options.l10n.modeLabel,
+      [['dropdown', options.l10n.selectWord], ['typed', options.l10n.typeWord]], options.choice.mode);
+    const categorySelect = options.enableCategories ? addSelect('category', options.l10n.selectCategory,
+      options.categories.map(category => [category.id, categoryLabel(category, options.l10n)]), options.choice.categoryId) : null;
+    const startButton = options.createStartButton ? options.createStartButton(options.l10n.start)
+      : element(document, 'button', 'h5p-joubelui-button h5p-concordances-papijo-start', options.l10n.start);
+    startButton.setAttribute('type', 'button');
+    container.appendChild(startButton);
+    return {element: container, modeSelect, categorySelect, startButton};
+  }
+
+  /** Native selection controls are reused throughout one attempt. */
   function renderSelectionControls(document, session, options) {
     const container = element(document, 'div', 'h5p-concordances-papijo-selection');
     let categorySelect = null;
@@ -339,8 +369,12 @@
       });
       categorySummary = element(document, 'p', 'h5p-concordances-papijo-category-summary');
       categorySummary.id = options.domId + '-category-summary';
-      container.appendChild(label);
-      container.appendChild(categorySelect);
+      if (!options.categoryFinalized) {
+        const categoryRow = element(document, 'div', 'h5p-concordances-papijo-category-row');
+        categoryRow.appendChild(label);
+        categoryRow.appendChild(categorySelect);
+        container.appendChild(categoryRow);
+      }
       container.appendChild(categorySummary);
     }
 
@@ -365,8 +399,10 @@
     answerSelect.id = options.domId + '-answer';
     answerSelect.setAttribute('aria-describedby', [categorySummary && categorySummary.id, progress.id].filter(Boolean).join(' '));
     if (!typed) populateAnswers(answerSelect, session.answers, options.l10n);
-    container.appendChild(answerLabel);
-    container.appendChild(answerSelect);
+    const answerRow = element(document, 'div', 'h5p-concordances-papijo-answer-row');
+    answerRow.appendChild(answerLabel);
+    answerRow.appendChild(answerSelect);
+    container.appendChild(answerRow);
     let hintStatus = null;
     let hintReveal = null;
     if (typed && options.enableHints) {
@@ -401,5 +437,5 @@
     return {element: container, exercise, hintStatus, hintReveal, categorySelect, categorySummary, progress, setHost, answerSelect, answerControl: answerSelect, feedback, announcement, sequenceEnd, resultsHost};
   }
 
-  return Object.freeze({renderSpellingWarning, renderSet, observeKwic, revealSet, renderDiagnostics, categoryLabel, renderResults, populateAnswers, renderSelectionControls});
+  return Object.freeze({renderSpellingWarning, renderSet, observeKwic, revealSet, renderDiagnostics, categoryLabel, renderResults, populateAnswers, renderSelectionControls, renderModeChoice});
 });

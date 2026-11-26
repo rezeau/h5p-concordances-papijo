@@ -96,7 +96,7 @@
     "name": "behaviour",
     "type": "group",
     "label": "Behavioural settings",
-    "description": "Choose how learners answer. Dropdown and typed answers use separate saved-state formats; changing mode starts a fresh attempt.",
+    "description": "Choose a fixed answer mode or let learners choose before starting. Typed settings also apply when learners choose Type word. Dropdown and typed answers use separate saved-state formats.",
     "fields": [
       {
         "name": "setOrder",
@@ -127,6 +127,10 @@
           {
             "value": "typed",
             "label": "Type the correct word in a text field"
+          },
+          {
+            "value": "learner",
+            "label": "Allow the learner to select the answer mode"
           }
         ]
       },
@@ -141,7 +145,7 @@
           "rules": [
             {
               "field": "answerMode",
-              "equals": "typed"
+              "equals": ["typed", "learner"]
             }
           ],
           "nullWhenHidden": false
@@ -158,7 +162,7 @@
           "rules": [
             {
               "field": "answerMode",
-              "equals": "typed"
+              "equals": ["typed", "learner"]
             }
           ],
           "nullWhenHidden": false
@@ -185,7 +189,7 @@
           "rules": [
             {
               "field": "answerMode",
-              "equals": "typed"
+              "equals": ["typed", "learner"]
             }
           ],
           "nullWhenHidden": false
@@ -211,7 +215,7 @@
           "rules": [
             {
               "field": "answerMode",
-              "equals": "typed"
+              "equals": ["typed", "learner"]
             },
             {
               "field": "spellingErrorBehaviour",
@@ -298,6 +302,24 @@
         "type": "text",
         "label": "Selected category",
         "default": "Category: @category"
+      },
+      {
+        "name": "modeLabel",
+        "type": "text",
+        "label": "Answer mode label",
+        "default": "Answer mode"
+      },
+      {
+        "name": "selectWord",
+        "type": "text",
+        "label": "Dropdown mode choice",
+        "default": "Select word"
+      },
+      {
+        "name": "typeWord",
+        "type": "text",
+        "label": "Typed mode choice",
+        "default": "Type word"
       },
       {
         "name": "start",
