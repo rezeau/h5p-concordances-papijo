@@ -32,9 +32,9 @@ function walkFields(fields, inspect) {
   }
 }
 
-test('manifest identifies a runnable standalone activity at version 1.1.3 for Core API 1.28', () => {
+test('manifest identifies a runnable standalone activity at version 1.1.4 for Core API 1.28', () => {
   assert.equal(library.machineName, 'H5P.ConcordancesPapiJo');
-  assert.deepEqual([library.majorVersion, library.minorVersion, library.patchVersion], [1, 1, 3]);
+  assert.deepEqual([library.majorVersion, library.minorVersion, library.patchVersion], [1, 1, 4]);
   assert.deepEqual(library.coreApi, { majorVersion: 1, minorVersion: 28 });
   assert.equal(library.runnable, 1);
   assert.deepEqual(library.embedTypes, ['iframe']);
@@ -43,7 +43,7 @@ test('manifest identifies a runnable standalone activity at version 1.1.3 for Co
     assert.ok(library[key].length > 0);
   }
   assert.match(library.description, /saved-state restoration and xAPI completion/i);
-  assert.equal(packageJson.version, '1.1.3');
+  assert.equal(packageJson.version, '1.1.4');
 });
 
 test('runtime depends only on official Question 1.5 and has no direct Components usage', () => {
@@ -177,7 +177,7 @@ test('manifest loads shared browser validation utilities before the learner shel
   ]);
 });
 
-test('answer mode is visible and defaults to dropdown while lifecycle controls stay hidden', () => {
+test('answer mode and Retry are visible while Show solution stays hidden', () => {
   const behaviour = field(semantics, 'behaviour');
   assert.equal(behaviour.type, 'group');
   assert.equal(behaviour.widget, undefined);
@@ -186,7 +186,14 @@ test('answer mode is visible and defaults to dropdown while lifecycle controls s
   assert.equal(mode.type, 'select');
   assert.equal(mode.default, 'dropdown');
   assert.deepEqual(mode.options.map(option=>option.value), ['dropdown', 'typed']);
-  for (const name of ['enableRetry', 'enableSolutionsButton']) assert.equal(field(behaviour.fields, name).widget, 'none');
+  assert.deepEqual(field(behaviour.fields, 'enableRetry'), {
+    name: 'enableRetry',
+    type: 'boolean',
+    label: 'Enable "Retry" button',
+    description: 'Allow learners to restart the activity after completing it.',
+    default: true
+  });
+  assert.equal(field(behaviour.fields, 'enableSolutionsButton').widget, 'none');
   assert.match(field(activity.fields, 'distractors').description, /inactive in typed/);
   assert.equal(field(behaviour.fields, 'enableRetry').default, true);
   assert.equal(field(behaviour.fields, 'enableSolutionsButton').default, false);
@@ -205,7 +212,7 @@ test('all semantic text stays plain without unintended rich-text formatting or H
 test('localization covers learner UI, categories, feedback, results, accessibility and validation', () => {
   const groups = {
     l10n: ['placeholderTitle', 'foundationMessage', 'selectCategory', 'allCategories', 'uncategorized',
-      'selectedCategory', 'start', 'progress', 'answerLabel', 'selectAnswer', 'check', 'next', 'retry',
+      'selectedCategory', 'start', 'progress', 'answerLabel', 'selectAnswer', 'check', 'next', 'viewResults', 'retry',
       'correct', 'incorrect', 'answerRequired', 'resultsTitle', 'totalScore', 'firstAttemptCount',
       'secondAttemptCount', 'laterAttemptCount', 'resultSet', 'resultWord', 'resultAttempts', 'resultPoints',
       'setLabel', 'invalidContentTitle', 'invalidContentDescription', 'runtimeError', 'sequenceEnd', 'attemptSingular', 'attemptPlural', 'typedInstruction', 'spellingWarning', 'spellingWarningAnswer', 'spellingWarningsExhausted', 'hint', 'hintLocked', 'hintLockedWarnings', 'hintAvailable', 'hintAfterRequest', 'hintRevealed', 'hintDescription'],
@@ -287,5 +294,5 @@ test('progressive hint author setting defaults disabled and remains typed-only w
   assert.equal(setting.type,'boolean');assert.equal(setting.default,false);
   assert.equal(setting.description,'Allow learners to request progressive letter hints after making incorrect attempts. Each hint reduces the available score by 0.5 points.');
   assert.deepEqual(setting.showWhen,{rules:[{field:'answerMode',equals:'typed'}],nullWhenHidden:false});
-  for(const name of ['enableRetry','enableSolutionsButton'])assert.equal(field(field(semantics,'behaviour').fields,name).widget,'none');
+  assert.equal(field(field(semantics,'behaviour').fields,'enableSolutionsButton').widget,'none');
 });

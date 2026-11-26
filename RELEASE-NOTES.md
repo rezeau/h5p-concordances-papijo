@@ -1,3 +1,23 @@
+# H5P.ConcordancesPapiJo 1.1.4 — approved for release
+
+- Exposes Enable "Retry" button in Behavioural settings, enabled by default.
+- Keeps the final Set and feedback visible until the learner selects the localized
+  View results button. The dedicated Results page retains existing Results formatting
+  and offers Retry only when enabled.
+- Completion, parent getAnswerGiven() and xAPI completion occur on the final correct
+  submission, independently of Results navigation. Opening Results emits no new completion.
+- Optional outer resultsPageVisible saved-state metadata preserves both completed
+  presentation stages. Legacy completed snapshots open directly on Results, including
+  schema-5 hint snapshots. Existing schema versions and fingerprints are unchanged;
+  invalid visibility states are rejected. Older runtimes may reject extended snapshots.
+- Learner Retry and parent reset clear presentation state; scoring is unchanged.
+
+Automated, H5P CLI and user-reported WordPress acceptance passed, including
+InteractiveBookPapiJo integration. Publication authorization is pending.
+Learner-selectable play mode remains ON HOLD.
+
+---
+
 # H5P.ConcordancesPapiJo 1.1.3 — prepared for WordPress acceptance
 
 Requires H5P Core API 1.28 and a modern browser with Intl.Segmenter support.

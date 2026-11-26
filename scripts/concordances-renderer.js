@@ -229,6 +229,7 @@
     const section = element(document, 'section', 'h5p-concordances-papijo-results');
     const heading = element(document, 'h3', '', options.l10n.resultsTitle);
     heading.id = options.domId + '-results-title';
+    heading.setAttribute('tabindex', '-1');
     section.setAttribute('role', 'region');
     section.setAttribute('aria-labelledby', heading.id);
     section.appendChild(heading);
@@ -389,12 +390,15 @@
     announcement.setAttribute('aria-atomic', 'true');
     container.appendChild(feedback);
     container.appendChild(announcement);
+    const exercise = element(document, 'div', 'h5p-concordances-papijo-exercise');
+    Array.from(container.childNodes).forEach(child => exercise.appendChild(child));
+    container.appendChild(exercise);
     const sequenceEnd = element(document, 'p', 'h5p-concordances-papijo-sequence-end');
     sequenceEnd.hidden = true;
     container.appendChild(sequenceEnd);
     const resultsHost = element(document, 'div', 'h5p-concordances-papijo-results-host');
     container.appendChild(resultsHost);
-    return {element: container, hintStatus, hintReveal, categorySelect, categorySummary, progress, setHost, answerSelect, answerControl: answerSelect, feedback, announcement, sequenceEnd, resultsHost};
+    return {element: container, exercise, hintStatus, hintReveal, categorySelect, categorySummary, progress, setHost, answerSelect, answerControl: answerSelect, feedback, announcement, sequenceEnd, resultsHost};
   }
 
   return Object.freeze({renderSpellingWarning, renderSet, observeKwic, revealSet, renderDiagnostics, categoryLabel, renderResults, populateAnswers, renderSelectionControls});

@@ -208,7 +208,7 @@ test('parent compatibility: learner Retry clears completion and permits one new 
   instance.attach();
   submitWord(instance, 'One');
   assert.equal(instance.getAnswerGiven(), true);
-  instance.retry();
+  instance.viewResults();instance.retry();
   assert.equal(instance.getAnswerGiven(), false);
   assert.equal(instance.getScore(), 0);
   assert.equal(instance.resultsView, null);
@@ -303,6 +303,7 @@ test('Set order runtime restoration and Retry follow the selected policy', async
     const restored = new Constructor(params, 42, {previousState: saved});
     restored.attach();
     assert.deepEqual(Array.from(restored.selectionSession.setOrder), expected);
+    restored.viewResults();
     assert.equal(restored.canRetry(), true);
     draw = 0.999999;
     restored.retry();
@@ -313,7 +314,7 @@ test('Set order runtime restoration and Retry follow the selected policy', async
     await solveAttempt(restored);
     assert.equal(restored.getScore(), 6);
     draw = 0;
-    restored.retry();
+    restored.viewResults();restored.retry();
     assert.deepEqual(Array.from(restored.selectionSession.setOrder), expected);
   }
 });
@@ -376,7 +377,7 @@ test('ordinary/LancsBox workflows retain categories, partial scores, restoration
     assert.equal(completedStatements(restored).length,1);
     assert.equal(completedStatements(restored)[0].result.success,true);
     assert.equal(completedStatements(restored)[0].result.score.raw,3);
-    assert.equal(restored.selectionElements.resultsHost.children.length,1);
+    restored.viewResults();assert.equal(restored.selectionElements.resultsHost.children.length,1);
     assert.ok(!restored.sections.content[0].textContent.includes('hidden.xml'));
     const completed=new Constructor(params,42,{previousState:restored.getCurrentState()});completed.attach();
     assert.equal(completedStatements(completed).length,0);assert.equal(completed.canRetry(),true);
@@ -403,7 +404,7 @@ test('Word/category escaped punctuation stays safe and retains raw identities',(
  const fingerprint=H5P.ConcordancesPapiJoState.fingerprint(params.activity);
  assert.equal(activity.selectionElements.answerSelect.children[1].textContent,"can't");submitWord(activity,'can&#039;t');
  assert.equal(activity.setView.pre.textContent,"[001] CAN'T <tag> &amp;quot;");
- assert.equal(findAll(activity.resultsView,n=>n.tagName==='TD')[0].textContent,"can't");
+ activity.viewResults();assert.equal(findAll(activity.resultsView,n=>n.tagName==='TD')[0].textContent,"can't");
  assert.equal(activity.getCurrentState().fingerprint,fingerprint);
  assert.equal(activity.getCurrentState().answerOrder[0],'can&#039;t');
  assert.equal(findAll(activity.sections.content,n=>n.tagName==='TAG').length,0);
@@ -514,7 +515,7 @@ test('typed categories, Next, final results and Retry reuse shared lifecycle and
   instance.nextSet();await Promise.resolve();assert.equal(instance.selectionElements.answerControl,input);
   assert.equal(input.value,'');assert.equal(document.activeElement,input);
   typeAnswer(instance,'two');instance.checkAnswer();assert.equal(instance.getScore(),3);assert.equal(instance.getMaxScore(),4);
-  assert.ok(instance.resultsView);assert.equal(instance.canRetry(),true);
+  instance.viewResults();assert.ok(instance.resultsView);assert.equal(instance.canRetry(),true);
   instance.retry();assert.equal(instance.selectionElements.answerControl,input);assert.equal(input.value,'');
   assert.equal(instance.getScore(),0);assert.equal(instance.selectionSession.categoryLocked,false);
   assert.equal(instance.selectionSession.answers.length,0);assert.equal(instance.resultsView,null);
@@ -556,7 +557,7 @@ test('typed completed restoration is quiet at 2/1/0 scores and Retry permits one
     assert.equal(completedStatements(live).length,1);assert.equal(live.getScore(),2-wrongs);
     assert.equal(completedStatements(live)[0].result.success,true);
     const restored=new Constructor(params,1,{previousState:JSON.parse(JSON.stringify(live.getCurrentState()))});restored.attach();restored.attach();restored.refreshSelection();restored.checkAnswer();
-    assert.equal(restored.getScore(),2-wrongs);assert.ok(restored.resultsView);assert.equal(completedStatements(restored).length,0);
+    assert.equal(restored.getScore(),2-wrongs);restored.viewResults();assert.ok(restored.resultsView);assert.equal(completedStatements(restored).length,0);
     restored.retry();typeAnswer(restored,'one');restored.checkAnswer();restored.refreshSelection();
     assert.equal(completedStatements(restored).length,1);assert.equal(restored.getScore(),2);
   }
@@ -576,7 +577,7 @@ test('typed penalty defaults, fractional results/xAPI, quiet restoration and Ret
   }
   assert.equal(instance.getScore(),3);assert.equal(instance.getMaxScore(),4);
   assert.deepEqual(Array.from(instance.selectionSession.getResults(),row=>row.units),[1.5,1.5]);
-  assert.ok(instance.resultsView.textContent.includes('1.5/2'));assert.ok(instance.resultsView.textContent.includes('3/4'));
+  instance.viewResults();assert.ok(instance.resultsView.textContent.includes('1.5/2'));assert.ok(instance.resultsView.textContent.includes('3/4'));
   const event=completedStatements(instance)[0];assert.equal(event.result.score.raw,3);assert.equal(event.result.score.max,4);assert.equal(event.result.score.scaled,0.75);
   const saved=JSON.parse(JSON.stringify(instance.getCurrentState()));const restored=new Constructor(params,1,{previousState:saved});restored.attach();restored.attach();assert.equal(restored.getScore(),3);assert.equal(completedStatements(restored).length,0);
   restored.retry();assert.equal(restored.getScore(),0);assert.equal(restored.selectionSession.typedPenalty,0.5);
@@ -600,7 +601,7 @@ test('spelling warning announces without answer revelation, restores quietly and
       typeAnswer(resumed,'frescp');resumed.checkAnswer();assert.equal(resumed.selectionSession.getSetState().attempts,1);
       typeAnswer(resumed,'fresco');resumed.checkAnswer();assert.equal(resumed.getScore(),1.5);
       const finished=new Constructor(params,1,{previousState:JSON.parse(JSON.stringify(resumed.getCurrentState()))});finished.attach();assert.equal(completedStatements(finished).length,0);
-      finished.retry();typeAnswer(finished,'fresoc');finished.checkAnswer();assert.equal(finished.selectionSession.getSetState().attempts,0);assert.equal(finished.getCurrentState().sets[0][6],1);
+      finished.viewResults();finished.retry();typeAnswer(finished,'fresoc');finished.checkAnswer();assert.equal(finished.selectionSession.getSetState().attempts,0);assert.equal(finished.getCurrentState().sets[0][6],1);
     }
   }
 });
@@ -662,7 +663,7 @@ test('warning allowance runtime restores highlighted feedback, counts, quiet com
     typeAnswer(restored,'FRESOC');assert.equal(restored.checkButton.disabled,true);
     typeAnswer(restored,'fresco');restored.checkAnswer();assert.equal(restored.getScore(),2);assert.equal(completedStatements(restored).length,1);
     const finished=new Constructor(params,1,{previousState:JSON.parse(JSON.stringify(restored.getCurrentState()))});finished.attach();assert.equal(completedStatements(finished).length,0);
-    finished.retry();assert.equal(finished.selectionSession.getSetState().warningCount,0);assert.equal(finished.selectionSession.getSetState().warnedAnswers.length,0);
+    finished.viewResults();finished.retry();assert.equal(finished.selectionSession.getSetState().warningCount,0);assert.equal(finished.selectionSession.getSetState().warnedAnswers.length,0);
     typeAnswer(finished,'fresoc');finished.checkAnswer();assert.equal(finished.selectionSession.getSetState().warningCount,1);assert.equal(finished.selectionSession.getSetState().attempts,0);
   }
 });
@@ -755,7 +756,7 @@ test('adaptive hints require improving submissions at positive points and a new 
   }
   assert.equal(instance.selectionSession.allSolved,false);assert.equal(completedStatements(instance).length,0);
   typeAnswer(instance,'fresco');instance.checkAnswer();assert.equal(instance.getScore(),0);
-  instance.retry();assert.equal(instance.selectionSession.getSetState().hintCount,0);
+  instance.viewResults();instance.retry();assert.equal(instance.selectionSession.getSetState().hintCount,0);
   assert.equal(instance.selectionSession.getSetState().warningCount,0);assert.equal(instance.selectionSession.getSetState().attempts,0);
   // A scored mistake can itself reach zero: the exception applies immediately,
   // but the next click still requires another scored submission.
@@ -852,5 +853,78 @@ test('progressive hints reset per Set and Retry, hide on success and retain scor
   assert.equal(instance.getScore(),0);instance.nextSet();await Promise.resolve();assert.equal(instance.getHintAvailability(),'locked');
   typeAnswer(instance,'abstract');instance.checkAnswer();assert.equal(instance.getScore(),2);assert.equal(instance.getMaxScore(),4);assert.equal(instance.getHintAvailability(),'hidden');
   const saved=instance.getCurrentState();assert.equal(saved.version,5);assert.ok(saved.hints.every(row=>row[1].length===0));
-  instance.retry();assert.equal(instance.getHintAvailability(),'locked');assert.equal(instance.getScore(),0);
+  instance.viewResults();instance.retry();assert.equal(instance.getHintAvailability(),'locked');assert.equal(instance.getScore(),0);
+});
+
+
+test('dedicated Results preserves completion, both saved stages, legacy restoration and reset', () => {
+  for (const behaviour of [{}, {answerMode: 'typed', enableRetry: false},
+    {answerMode: 'typed', enableProgressiveHints: true}]) {
+    const {Constructor, document, H5P} = createHarness();
+    const params = {behaviour, l10n: {viewResults: 'Open summary'}, activity: {
+      enableCategories: true, sets: [{word: 'One', context: 'ONE', category: 'A'},
+        {word: 'Two', context: 'TWO', category: 'B'}]
+    }};
+    const instance = new Constructor(params); instance.attach();
+    const controls = instance.selectionElements;
+    controls.categorySelect.value = 'category-0';
+    controls.categorySelect.dispatchEvent({type: 'change'});
+    instance.viewResults(); assert.equal(instance.resultsPageVisible, false);
+    if (behaviour.answerMode === 'typed') { typeAnswer(instance, 'one'); instance.checkAnswer(); }
+    else submitWord(instance, 'One');
+    assert.equal(instance.getAnswerGiven(), true);
+    assert.equal(instance.getScore(), 2); assert.equal(instance.getMaxScore(), 2);
+    assert.equal(completedStatements(instance).length, 1);
+    assert.equal(controls.feedback.textContent, 'Correct');
+    assert.equal(controls.exercise.hidden, false); assert.equal(controls.resultsHost.hidden, true);
+    assert.equal(controls.sequenceEnd.hidden, true);
+    assert.equal(instance.buttons['view-results'].label, 'Open summary');
+    assert.equal(instance.buttons['view-results'].element.hidden, false);
+    assert.equal(instance.canRetry(), false);
+    instance.retry(); assert.equal(instance.getAnswerGiven(), true);
+    const before = JSON.parse(JSON.stringify(instance.getCurrentState()));
+    assert.equal(before.resultsPageVisible, false);
+    instance.buttons['view-results'].callback();
+    assert.equal(controls.exercise.hidden, true); assert.equal(controls.resultsHost.hidden, false);
+    for (const node of [controls.categorySelect, controls.progress, controls.setHost,
+      controls.answerControl, controls.feedback, controls.hintStatus].filter(Boolean)) {
+      assert.ok(findAll(controls.exercise, n => n === node).length);
+    }
+    assert.equal(instance.instruction[0].hidden, true);
+    assert.equal(controls.sequenceEnd.textContent, instance.params.l10n.sequenceEnd);
+    const heading = instance.resultsView.children[0];
+    assert.equal(document.activeElement, heading); assert.equal(heading.tabIndex, -1);
+    for (const id of ['check-answer', 'next-set', 'view-results', 'letter-hint']) {
+      if (instance.buttons[id]) assert.equal(instance.buttons[id].element.hidden, true);
+    }
+    instance.viewResults(); instance.checkAnswer();
+    assert.equal(completedStatements(instance).length, 1); assert.equal(instance.getScore(), 2);
+    const after = JSON.parse(JSON.stringify(instance.getCurrentState()));
+    assert.equal(after.resultsPageVisible, true);
+    const legacy = {...after}; delete legacy.resultsPageVisible;
+    for (const [saved, visible] of [[before, false], [after, true], [legacy, true]]) {
+      const harness = createHarness(() => { throw new Error('Restoration must not shuffle'); });
+      const restored = new harness.Constructor(params, 1, {previousState: saved}); restored.attach();
+      assert.equal(restored.resultsPageVisible, visible);
+      assert.equal(restored.selectionElements.exercise.hidden, visible);
+      assert.equal(restored.getAnswerGiven(), true); assert.equal(restored.getScore(), 2);
+      assert.equal(completedStatements(restored).length, 0);
+      assert.equal(harness.document.activeElement, undefined);
+    }
+    const state = H5P.ConcordancesPapiJoState;
+    assert.equal(state.validateState(params.activity, {...after, resultsPageVisible: 'true'}, behaviour).valid, false);
+    assert.equal(state.fingerprint(params.activity, behaviour), after.fingerprint);
+    if (behaviour.enableRetry === false) {
+      assert.equal(instance.buttons['try-again'], undefined);
+      instance.retry(); assert.equal(instance.resultsPageVisible, true);
+    }
+    else {
+      assert.equal(instance.buttons['try-again'].element.hidden, false);
+      instance.retry(); assert.equal(instance.resultsPageVisible, false);
+      assert.equal(controls.exercise.hidden, false); assert.equal(instance.getScore(), 0);
+    }
+    instance.resetTask();
+    assert.equal(instance.resultsPageVisible, false); assert.equal(controls.exercise.hidden, false);
+    assert.equal(instance.resultsView, null); assert.equal(instance.getAnswerGiven(), false);
+  }
 });

@@ -271,3 +271,23 @@ test('warning allowance schema 4 round-trips counts/history with strict cross-al
   }
   for(const behaviour of [{},{answerMode:'typed'}])assert.equal(stateModel.fingerprint(activity,behaviour),stateModel.fingerprint(activity,{...behaviour,freeSpellingWarnings:'unlimited'}));
 });
+
+
+test('page metadata rejects unfinished Results, accessors and nested hint flags', () => {
+  const activity = {sets: [{word: 'One', context: 'ONE'}]};
+  for (const behaviour of [{}, {answerMode: 'typed', enableProgressiveHints: true}]) {
+    const session = model.createSelectionSession(activity, keepOrder, null,
+      behaviour.answerMode, 1, 'mistake', 2, behaviour.enableProgressiveHints);
+    const snapshot = stateModel.createState(activity, session, false);
+    assert.equal(stateModel.validateState(activity, snapshot, behaviour).valid, true);
+    assert.equal(stateModel.validateState(activity, {...snapshot, resultsPageVisible: true}, behaviour).valid, false);
+    Object.defineProperty(snapshot, 'resultsPageVisible', {enumerable: true,
+      get() { throw new Error('Must not execute'); }});
+    assert.equal(stateModel.validateState(activity, snapshot, behaviour).valid, false);
+    if (behaviour.enableProgressiveHints) {
+      const nested = stateModel.createState(activity, session, false);
+      nested.baseState.resultsPageVisible = false;
+      assert.equal(stateModel.validateState(activity, nested, behaviour).valid, false);
+    }
+  }
+});

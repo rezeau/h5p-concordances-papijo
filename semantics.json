@@ -243,9 +243,9 @@
       {
         "name": "enableRetry",
         "type": "boolean",
-        "label": "Enable Retry activity",
-        "default": true,
-        "widget": "none"
+        "label": "Enable \"Retry\" button",
+        "description": "Allow learners to restart the activity after completing it.",
+        "default": true
       },
       {
         "name": "enableSolutionsButton",
@@ -334,6 +334,12 @@
         "type": "text",
         "label": "Next",
         "default": "Next"
+      },
+      {
+        "name": "viewResults",
+        "type": "text",
+        "label": "View results button",
+        "default": "View results"
       },
       {
         "name": "retry",

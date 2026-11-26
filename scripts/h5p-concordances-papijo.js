@@ -26,6 +26,7 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
     selectAnswer: 'Select a word or expression',
     check: 'Check',
     next: 'Next',
+    viewResults: 'View results',
     retry: 'Retry activity',
     sequenceEnd: 'You have reached the end of this sequence.',
     correct: 'Correct',
@@ -133,6 +134,7 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
     this.domRegistered = false;
     this.selectionSession = null;
     this.completionEmitted = false;
+    this.resultsPageVisible = false;
     this.on('resize', () => this.kwicLayout?.update());
     this.on('domChanged', (event) => {
       // Question emits this after attaching sections. Do not echo resize events.
@@ -176,7 +178,7 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
     $('<h2>', { class: 'h5p-concordances-papijo-title' })
       .text(this.getTitle())
       .appendTo($content);
-    $('<p>', { class: 'h5p-concordances-papijo-notice', role: 'note' })
+    this.instruction = $('<p>', { class: 'h5p-concordances-papijo-notice', role: 'note' })
       .text(this.params.behaviour.answerMode === 'typed' ? this.params.l10n.typedInstruction : this.params.l10n.foundationMessage)
       .appendTo($content);
 
@@ -190,8 +192,13 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
     }
     else {
       // Read once at initial registration. Invalid or inaccessible host data starts clean.
-      try { this.selectionSession = stateModel.restoreSession(this.params.activity, this.contentData.previousState, this.params.behaviour); }
-      catch (error) { this.selectionSession = null; }
+      try {
+        const previousState = this.contentData.previousState;
+        this.selectionSession = stateModel.restoreSession(this.params.activity, previousState, this.params.behaviour);
+        this.resultsPageVisible = Boolean(this.selectionSession &&
+          stateModel.validateState(this.params.activity, previousState, this.params.behaviour).resultsPageVisible);
+      }
+      catch (error) { this.selectionSession = null; this.resultsPageVisible = false; }
       if (!this.selectionSession) this.selectionSession = sessionModel.createSelectionSession(this.params.activity, undefined, null, this.params.behaviour.answerMode, this.params.behaviour.typedPenalty, this.params.behaviour.spellingErrorBehaviour, this.params.behaviour.freeSpellingWarnings, this.params.behaviour.enableProgressiveHints);
       this.completionEmitted = this.selectionSession.allSolved;
       this.selectionElements = renderer.renderSelectionControls(document, this.selectionSession, {
@@ -242,6 +249,9 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
       this.addButton('next-set', buttonText(this.params.l10n.next), () => this.nextSet(), true, {
         disabled: true, classes: this.domId + '-next',
         'aria-label': buttonText(this.params.l10n.next)
+      });
+      this.addButton('view-results', buttonText(this.params.l10n.viewResults), () => this.viewResults(), false, {
+        'aria-label': buttonText(this.params.l10n.viewResults)
       });
       if (this.params.behaviour.enableRetry) {
         // Question has no automatic reset callback: the content type supplies it.
@@ -312,9 +322,12 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
     }
     // Refresh/reattachment/category restoration never announces historical feedback.
     controls.announcement.textContent = '';
-    controls.sequenceEnd.textContent = session.atSequenceEnd ? this.params.l10n.sequenceEnd : '';
-    controls.sequenceEnd.hidden = !session.atSequenceEnd;
-    if (session.allSolved && !this.resultsView) {
+    this.instruction[0].hidden = this.resultsPageVisible;
+    controls.exercise.hidden = this.resultsPageVisible;
+    controls.resultsHost.hidden = !this.resultsPageVisible;
+    controls.sequenceEnd.textContent = this.resultsPageVisible ? this.params.l10n.sequenceEnd : '';
+    controls.sequenceEnd.hidden = !this.resultsPageVisible;
+    if (this.resultsPageVisible && session.allSolved && !this.resultsView) {
       this.resultsView = renderer.renderResults(controls.resultsHost.ownerDocument, session.getResults(), {
         domId: this.domId, l10n: this.params.l10n, score: session.getScore(), maxScore: session.getMaxScore()
       });
@@ -379,7 +392,19 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
   };
 
   ConcordancesPapiJo.prototype.updateCheckButton = function () {
+    if (!this.selectionSession) return;
     this.refreshHintControl();
+    if (this.resultsPageVisible) {
+      this.hideButton('check-answer');
+      this.hideButton('next-set');
+      this.hideButton('view-results');
+      if (this.hintButton) this.hideButton('letter-hint');
+    }
+    else {
+      this.showButton('check-answer');
+      if (this.selectionSession?.allSolved && !this.checkProcessing && !this.retryProcessing && !this.checkFailed) this.showButton('view-results');
+      else this.hideButton('view-results');
+    }
     const disabled = Boolean(this.checkFailed || this.checkProcessing || this.retryProcessing || !this.selectionSession?.canCheck());
     if (this.checkButton) {
       this.checkButton.disabled = disabled;
@@ -390,7 +415,7 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
       const nextDisabled = Boolean(this.checkFailed || this.checkProcessing || this.retryProcessing || this.navigationProcessing || !session?.canAdvance());
       this.nextButton.disabled = nextDisabled;
       this.nextButton.setAttribute('aria-disabled', String(nextDisabled));
-      if (session.currentPosition >= session.eligibleSetIndices.length - 1) this.hideButton('next-set');
+      if (this.resultsPageVisible || session.currentPosition >= session.eligibleSetIndices.length - 1) this.hideButton('next-set');
       else this.showButton('next-set');
     }
     if (this.params.behaviour.enableRetry && this.selectionSession) {
@@ -400,7 +425,7 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
   };
 
   ConcordancesPapiJo.prototype.canRetry = function () {
-    return Boolean(this.params.behaviour.enableRetry && this.selectionSession?.allSolved && this.resultsView &&
+    return Boolean(this.params.behaviour.enableRetry && this.selectionSession?.allSolved && this.resultsPageVisible && this.resultsView &&
       !this.checkFailed && !this.checkProcessing && !this.navigationProcessing && !this.retryProcessing);
   };
 
@@ -413,6 +438,7 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
     this.checkFailed = false;
     this.checkProcessing = false;
     this.navigationProcessing = false;
+    this.resultsPageVisible = false;
     this.resultsView = null;
     this.selectionElements.resultsHost.replaceChildren();
     // Force a blank KWIC view even if the new shuffle starts with the same Set.
@@ -449,6 +475,16 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
     }
   };
 
+  /** Presentation-only navigation; completion already occurred on submission. */
+  ConcordancesPapiJo.prototype.viewResults = function () {
+    if (this.resultsPageVisible || !this.selectionSession?.allSolved || this.checkFailed ||
+      this.checkProcessing || this.retryProcessing || this.navigationProcessing) return;
+    this.resultsPageVisible = true;
+    this.refreshSelection();
+    this.resultsView.children[0].focus();
+    this.trigger('resize');
+  };
+
   /** Advance once, then let focus settle before accepting another activation. */
   ConcordancesPapiJo.prototype.nextSet = function () {
     if (this.checkFailed || this.checkProcessing || this.retryProcessing || this.navigationProcessing || !this.selectionSession?.canAdvance()) return;
@@ -469,7 +505,7 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
     }
   };
 
-  /** One guarded submission; only the live transition into results reports completion. */
+  /** One guarded submission; only the live transition into completion reports completion. */
   ConcordancesPapiJo.prototype.checkAnswer = function () {
     if (this.checkFailed || this.checkProcessing || this.retryProcessing || !this.selectionSession?.canCheck()) return;
     this.checkProcessing = true;
@@ -482,8 +518,7 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
         () => utilities.decodeEditorText(this.params.activity.sets[this.selectionSession.displayedSetIndex].word))
         : this.params.a11y.incorrectAnswer;
       (result.correct ? this.setView.scroll : this.selectionElements.answerControl).focus();
-      this.selectionElements.announcement.textContent = message + (this.selectionSession.atSequenceEnd
-        ? ' ' + this.params.l10n.sequenceEnd : '');
+      this.selectionElements.announcement.textContent = message;
     }
     catch (error) {
       // Keep unexpected internal failures inert and expose only localized text.
@@ -499,12 +534,12 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
       this.updateCheckButton();
       this.trigger('resize');
     }
-    if (!this.checkFailed && this.resultsView && this.selectionSession.allSolved) this._reportCompletion();
+    if (!this.checkFailed && this.selectionSession.allSolved) this._reportCompletion();
   };
 
   /** One standalone completed statement per attempt; reporting cannot alter the UI. */
   ConcordancesPapiJo.prototype._reportCompletion = function () {
-    if (this.completionEmitted || !this.selectionSession?.allSolved || !this.resultsView) return;
+    if (this.completionEmitted || !this.selectionSession?.allSolved) return;
     this.completionEmitted = true;
     try {
       const event = this.createXAPIEventTemplate('completed');
@@ -539,14 +574,14 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
     return this.selectionSession?.getMaxScore() ?? 0;
   };
 
-  /** The selected-category activity is answered only once final results are available. */
+  /** The selected-category activity is answered once the selected sequence is solved. */
   ConcordancesPapiJo.prototype.getAnswerGiven = function () {
-    return Boolean(this.selectionSession?.allSolved && this.resultsView);
+    return Boolean(this.selectionSession?.allSolved);
   };
 
   /** Serialize the current live attempt, including restored interaction state. */
   ConcordancesPapiJo.prototype.getCurrentState = function () {
-    return stateModel.createState(this.params.activity, this.selectionSession);
+    return stateModel.createState(this.params.activity, this.selectionSession, this.resultsPageVisible);
   };
 
   return ConcordancesPapiJo;

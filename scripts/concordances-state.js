@@ -66,7 +66,7 @@
   }
 
   /** Independent JSON data only. An uninitialized/invalid activity has no snapshot. */
-  function createState(activity, session) {
+  function createAttemptState(activity, session) {
     try {
       if (!session) return {};
       if (session.answerMode === 'typed') {
@@ -101,6 +101,33 @@
       };
     }
     catch (error) { return {}; }
+  }
+
+  /** Presentation is optional metadata; legacy completed attempts opened Results. */
+  function createState(activity, session, resultsPageVisible) {
+    const snapshot = createAttemptState(activity, session);
+    if (snapshot.fingerprint && typeof resultsPageVisible === 'boolean') {
+      snapshot.resultsPageVisible = Boolean(session.allSolved && resultsPageVisible);
+    }
+    return snapshot;
+  }
+
+  function validateState(activity, candidate, behaviour) {
+    try {
+      let page;
+      if (candidate && Object.hasOwn(candidate, 'resultsPageVisible')) {
+        const keys = Reflect.ownKeys(candidate);
+        if (!record(candidate, keys) || typeof candidate.resultsPageVisible !== 'boolean') return invalid('page');
+        page = candidate.resultsPageVisible;
+        candidate = Object.fromEntries(keys.filter(key => key !== 'resultsPageVisible').map(key => [key, candidate[key]]));
+      }
+      const validated = validateAttemptState(activity, candidate, behaviour);
+      if (!validated.valid) return validated;
+      const solved = validated.state.results;
+      if (page === true && !solved) return invalid('page');
+      return {...validated, resultsPageVisible: page === undefined ? solved : page};
+    }
+    catch (error) { return invalid('shape'); }
   }
 
   /** Reject accessors, custom records and extra fields instead of executing/repairing them. */
@@ -139,7 +166,7 @@
   const pristine = (row) => row[1] === null && row[2] === 0 && !row[3] && !row[4];
 
   /** Pure compatibility/consistency check. It never applies state to a session. */
-  function validateState(activity, candidate, behaviour) {
+  function validateAttemptState(activity, candidate, behaviour) {
     if (hintsEnabled(behaviour)) return validateHintState(activity, candidate, behaviour);
     if (utilities.resolveAnswerMode(behaviour) === 'typed') return validateTypedState(activity, candidate, utilities.resolveTypedPenalty(behaviour), utilities.resolveSpellingPolicy(behaviour), utilities.resolveWarningAllowance(behaviour));
     try {
@@ -209,7 +236,7 @@
   function validateHintState(activity, candidate, behaviour) {
     try {
       if (!record(candidate, ['version', 'fingerprint', 'baseState', 'hints']) || candidate.version !== 5) return invalid('shape');
-      const base = validateState(activity, candidate.baseState, {...behaviour, enableProgressiveHints: false});
+      const base = validateAttemptState(activity, candidate.baseState, {...behaviour, enableProgressiveHints: false});
       if (!base.valid || candidate.fingerprint !== hintFingerprint(base.state.fingerprint)) return invalid('content');
       if (!array(candidate.hints, base.state.sets.length)) return invalid('hints');
       const rows = new Map(base.state.sets.map((row) => [row[0], row]));

@@ -2,11 +2,18 @@
 
 A standalone H5P concordance activity. Authors paste lines containing a target
 Word; learners identify the automatically hidden word using a dropdown or typed input.
-Source declarations are **1.1.3**, requiring **H5P Core API 1.28**.
-The current published release is 1.1.2. Version 1.1.3 is prepared for WordPress
-acceptance, adding automatic horizontal KWIC centring while preserving manual
-scrolling and native browser scrollbar behaviour; see the
-[release notes](RELEASE-NOTES.md).
+Source declarations are **1.1.4**, requiring **H5P Core API 1.28**.
+The current published release is 1.1.3. Version 1.1.4 is approved for release, exposing the Retry authoring option and adding a dedicated Results page.
+See the [release notes](RELEASE-NOTES.md).
+
+After the final correct answer, View results opens the dedicated Results page.
+Completion and xAPI reporting occur immediately on that answer, even if Results is
+never opened. Retry is available only on Results when enabled. Saved state preserves
+both the solved final Set and the open Results page through optional outer
+`resultsPageVisible` metadata. Legacy completed snapshots, including schema-5 hints,
+open directly on Results. Schema versions and fingerprints remain unchanged.
+Invalid page states are rejected; older runtimes may reject extended snapshots.
+
 The accepted 1.1.0 package is documented in the
 [1.1.0 release record](docs/release-1.1.0.md).
 
@@ -31,7 +38,7 @@ not invalidate typed attempts. Completed restoration does not replay xAPI comple
 Phases 2B and 2C have passed user-reported local Firefox acceptance, including
 Set order placement in Behavioural settings. The exact 1.1.0 package has also
 passed independent WordPress installation and Firefox acceptance. This does not
-establish fractional My Results support. Source declarations are now 1.1.3;
+establish fractional My Results support. Source declarations are now 1.1.4;
 the published 1.1.0, 1.1.1 and 1.1.2 packages remain unchanged. See the
 [restoration checkpoint report](docs/typed-state-checkpoint.md).
 
@@ -228,11 +235,10 @@ Papi Jo author metadata are retained.
 
 ## Installation and verification
 
-Published releases through 1.1.2 and historical release directories are preserved.
-Version 1.1.3 has passed user-reported manual Firefox acceptance for automatic
-KWIC centring, standalone and inside InteractiveBookPapiJo. Native browser
-scrollbar behaviour is accepted. The prepared package awaits WordPress acceptance
-and explicit publication authorization; it has not been published.
+Published releases through 1.1.3 and all historical release directories are preserved.
+Version 1.1.4 passed automated, H5P CLI and user-reported WordPress acceptance,
+including InteractiveBookPapiJo integration. Publication authorization is pending.
+Learner-selectable play mode remains ON HOLD.
 
 The accepted 1.1.0 archive's exact filename,
 hash and installation qualifications are in the [release record](docs/release-1.1.0.md).
