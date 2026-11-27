@@ -84,7 +84,8 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
   }
 
   // Question/Components treats button labels as HTML, so escape localized text at
-  // this boundary. All our other authored/localized output uses DOM textContent.
+  // this boundary. Task description HTML is validated by H5P Core using semantics;
+  // all other authored/localized output uses DOM textContent.
   function buttonText(value) {
     return value.replace(/[&<>"']/g, (character) =>
       ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[character]);
@@ -231,6 +232,14 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
     $('<h2>', { class: 'h5p-concordances-papijo-title' })
       .text(this.getTitle())
       .appendTo($content);
+    if (this.params.activity.introduction.length > 0) {
+      // H5P Core sanitizes this HTML field according to semantics.json before runtime.
+      // Keep it outside the replaceable attempt host and Question's introduction
+      // wrapper so normal theme typography and authored formatting can inherit.
+      $('<div>', { class: 'h5p-concordances-papijo-introduction', id: this.domId + '-introduction' })
+        .html(this.params.activity.introduction)
+        .appendTo($content);
+    }
     this.instruction = $('<p>', { class: 'h5p-concordances-papijo-notice', role: 'note' })
       .text(this.params.behaviour.answerMode === 'typed' ? this.params.l10n.typedInstruction : this.params.l10n.foundationMessage)
       .appendTo($content);
@@ -271,11 +280,6 @@ H5P.ConcordancesPapiJo = (function (Question, $, utilities, sessionModel, stateM
       if (this.learnerChoice && !this.selectionSession) this.showChoice();
       else this.mountAttempt();
     }
-    if (this.params.activity.introduction.length > 0) {
-      this.setIntroduction($('<p>', { class: 'h5p-concordances-papijo-introduction' })
-        .text(this.params.activity.introduction));
-    }
-
     this.setContent($content);
     this.domRegistered = true;
   };

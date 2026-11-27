@@ -50,8 +50,13 @@ function createHarness(randomDraw = () => 0.999999) {
       return this;
     }
 
-    html() {
-      throw new Error('The foundation must not insert authored HTML.');
+    html(value) {
+      assert.equal(this.tag, '<div>');
+      assert.equal(this[0].className, 'h5p-concordances-papijo-introduction');
+      // Capture the jQuery HTML boundary; this text-only DOM does not parse HTML.
+      this.authoredHtml = value;
+      this[0].authoredHtml = value;
+      return this;
     }
   }
 
@@ -204,6 +209,108 @@ async function solveAttempt(instance) {
 
 
 const completedStatements = (instance) => instance.events.filter(event=>event.name==='xAPI').map(event=>event.data.statement);
+
+test('introduction renders plain multiline text and formatted HTML in a block container', () => {
+  for (const introduction of ['First line\nSecond line\r\nThird line',
+    '<h2>Task</h2><p><strong>Guess</strong> <em>each</em> <u>word</u>.</p><ul><li>Read</li></ul><ol><li>Answer</li></ol><hr><p><a href="https://example.org">Help</a><span style="color: #ff0000; font-size: 120%;">Hint</span></p>',
+    'Compare 2 &lt; 3 &amp; 4 &gt; 1']) {
+    const {Constructor} = createHarness();
+    const instance = new Constructor({activity: {introduction}});
+    instance.registerDomElements();
+    const description = instance.sections.content[0].querySelector('.h5p-concordances-papijo-introduction');
+    assert.equal(description.tagName, 'DIV');
+    assert.equal(description.authoredHtml, introduction);
+    assert.equal(description.parentNode, instance.sections.content[0]);
+    assert.equal(description.id, instance.domId + '-introduction');
+    assert.equal(instance.sections.introduction, undefined);
+    assert.equal(instance.params.activity.introduction, introduction);
+  }
+  const css = fs.readFileSync(path.join(root, 'styles/h5p-concordances-papijo.css'), 'utf8');
+  assert.match(css, /\.h5p-concordances-papijo-introduction\s*\{\s*white-space: pre-wrap;\s*overflow-wrap: anywhere;/);
+});
+
+test('introduction remains optional and empty without injecting the new editor default', () => {
+  for (const introduction of [undefined, '', null, 42]) {
+    const {Constructor} = createHarness();
+    const instance = new Constructor({activity: {introduction}});
+    instance.registerDomElements();
+    assert.equal(instance.params.activity.introduction, '');
+    assert.equal(instance.sections.introduction, undefined);
+    assert.equal(instance.sections.content[0].querySelector('.h5p-concordances-papijo-introduction'), null);
+  }
+});
+
+test('introduction remains instance-scoped through Start, Results, Retry, parent reset and restoration', async () => {
+  const {Constructor} = createHarness();
+  for (const answerMode of ['dropdown', 'learner']) {
+    const params = {activity: {introduction: '<p><strong>Read</strong> and guess.</p>',
+      sets: [{word: 'one', context: 'One example.'}]}, behaviour: {answerMode}};
+    const instance = new Constructor(params);
+    instance.attach();
+    const content = instance.sections.content[0];
+    const description = content.querySelector('.h5p-concordances-papijo-introduction');
+    const check = (target, expected) => {
+      const nodes = findAll(target.sections.content[0], node => node.className === 'h5p-concordances-papijo-introduction');
+      assert.equal(nodes.length, 1);
+      if (expected) assert.equal(nodes[0], expected);
+      assert.equal(nodes[0].authoredHtml, params.activity.introduction);
+      assert.equal(nodes[0].id, target.domId + '-introduction');
+      assert.equal(target.sections.introduction, undefined);
+      const children = target.sections.content[0].children;
+      assert.ok(children.indexOf(nodes[0]) < children.indexOf(target.attemptHost));
+    };
+    const start = () => {
+      if (answerMode === 'learner') instance.setupElements.startButton.click();
+    };
+    check(instance, description);
+    start(); check(instance, description);
+    const active = new Constructor(params, 1, {previousState: JSON.parse(JSON.stringify(instance.getCurrentState()))});
+    active.attach(); check(active);
+    assert.notEqual(active.sections.content[0].querySelector('.h5p-concordances-papijo-introduction').id, description.id);
+    await solveAttempt(instance);
+    instance.viewResults(); check(instance, description);
+    const restored = new Constructor(params, 1, {previousState: JSON.parse(JSON.stringify(instance.getCurrentState()))});
+    restored.attach(); check(restored);
+    assert.equal(restored.resultsPageVisible, true);
+    instance.retry(); check(instance, description);
+    start(); check(instance, description);
+    instance.resetTask(); check(instance, description);
+    instance.attach(); check(instance, description);
+    assert.equal(instance.sections.content[0], content);
+  }
+});
+
+test('introduction HTML safety uses the official H5P Core semantic validator',
+  {skip: !process.env.H5P_CORE_PATH && 'Set H5P_CORE_PATH to the installed h5p.classes.php; PHP is required.'}, () => {
+    const {spawnSync} = require('node:child_process');
+    const inputs = [
+      'First line\nSecond line',
+      '<h2>Task</h2><p><strong>Guess</strong><em>word</em><u>now</u><br>Next</p><ul><li>Read</li></ul><ol><li>Answer</li></ol><h3>3</h3><h4>4</h4><h5>5</h5><hr><a href="https://example.org">Help</a><span style="font-size: 120%; font-family: Arial; color: #ff0000; background-color: #ffffff;">Hint</span>',
+      '',
+      '<script>alert(1)</script><img src=x onerror="alert(2)"><svg onload="alert(3)"></svg><a href="javascript:alert(4)" onclick="alert(5)">Bad</a><span style="color: #ff0000; background-image: url(javascript:alert(6)); position: fixed;" onmouseover="alert(7)">Text</span>',
+      'Compare 2 < 3 & 4 > 1'
+    ];
+    const result = spawnSync('php', [path.join(__dirname, 'helpers/filter-introduction.php'),
+      process.env.H5P_CORE_PATH, path.join(root, 'semantics.json')], {input: JSON.stringify(inputs), encoding: 'utf8'});
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const filtered = JSON.parse(result.stdout);
+    assert.equal(filtered[0], inputs[0]);
+    assert.equal(filtered[2], '');
+    for (const tag of ['h2', 'p', 'strong', 'em', 'u', 'br', 'ul', 'li', 'ol', 'h3', 'h4', 'h5', 'hr', 'a', 'span']) {
+      assert.match(filtered[1], new RegExp('<' + tag + '(?:[ >])'));
+    }
+    for (const style of ['font-size', 'font-family', 'color', 'background-color']) assert.ok(filtered[1].includes(style));
+    assert.ok(filtered[1].includes('https://example.org'));
+    assert.doesNotMatch(filtered[3], /<\/?(?:script|img|svg)\b|\son\w+\s*=|javascript:|background-image|position:/i);
+    assert.ok(filtered[3].includes('color: #ff0000'));
+    assert.ok(filtered[4].includes('&lt;'));
+    for (const introduction of filtered) {
+      const {Constructor} = createHarness();
+      const instance = new Constructor({activity: {introduction}});
+      instance.registerDomElements();
+      assert.equal(instance.sections.content[0].querySelector('.h5p-concordances-papijo-introduction')?.authoredHtml ?? '', introduction);
+    }
+  });
 
 test('KWIC lifecycle centres on attachment and revelation, replaces observers and disposes them', () => {
   const {Constructor, document} = createHarness(), observers = [];

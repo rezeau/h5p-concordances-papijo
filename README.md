@@ -2,9 +2,16 @@
 
 A standalone H5P concordance activity. Authors paste lines containing a target
 Word; learners identify the automatically hidden word using a dropdown or typed input.
-Source declarations are **1.1.5**, requiring **H5P Core API 1.28**.
-The current published release is 1.1.4. Version 1.1.5 is approved for release, adding learner-selected answer mode and a compact learner interface.
+Source declarations are **1.1.6**, requiring **H5P Core API 1.28**.
+The current published release is 1.1.5. Version 1.1.6 is prepared for manual WordPress acceptance.
 See the [release notes](RELEASE-NOTES.md).
+
+Version 1.1.6 adds the standard H5P rich-text Task description editor and a
+Tutorial and Examples link to Papi Jo's H5P WordPress site at the top of the editor.
+Existing introductions retain the internal `introduction` field name, including
+plain multiline text and empty descriptions. HTML follows standard H5P semantic
+validation. Both editor improvements passed maintainer H5P CLI acceptance.
+No `upgrades.js` is needed because the internal field name is unchanged.
 
 After the final correct answer, View results opens the dedicated Results page.
 Completion and xAPI reporting occur immediately on that answer, even if Results is
@@ -38,7 +45,7 @@ not invalidate typed attempts. Completed restoration does not replay xAPI comple
 Phases 2B and 2C have passed user-reported local Firefox acceptance, including
 Set order placement in Behavioural settings. The exact 1.1.0 package has also
 passed independent WordPress installation and Firefox acceptance. This does not
-establish fractional My Results support. Source declarations are now 1.1.5;
+establish fractional My Results support. Source declarations are now 1.1.6;
 the published 1.1.0, 1.1.1 and 1.1.2 packages remain unchanged. See the
 [restoration checkpoint report](docs/typed-state-checkpoint.md).
 

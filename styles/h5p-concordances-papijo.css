@@ -21,6 +21,7 @@
 .h5p-concordances-papijo-introduction {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  margin-bottom: var(--h5p-theme-spacing-s, 0.75rem);
 }
 
 .h5p-concordances-papijo-set {

@@ -1,3 +1,18 @@
+# H5P.ConcordancesPapiJo 1.1.6 — prepared for WordPress acceptance
+
+- Adds the standard H5P rich-text Task description editor, with backward
+  compatibility for existing plain-text, multiline and empty introductions.
+- Adds the Tutorial and Examples link to Papi Jo's H5P WordPress site at the
+  top of the content editor, preserving the established informational markup.
+- Retains the internal `introduction` field name; no `upgrades.js` is needed.
+- Uses standard H5P semantic HTML sanitization and the existing Question section
+  and introduction styling. No scoring or saved-state changes.
+
+Both editor improvements have passed maintainer-reported H5P CLI manual acceptance.
+The release package awaits manual WordPress acceptance; no deployment or publication.
+
+---
+
 # H5P.ConcordancesPapiJo 1.1.5 — approved for release
 
 - Adds learner-choice answer mode alongside the unchanged fixed dropdown and typed modes.

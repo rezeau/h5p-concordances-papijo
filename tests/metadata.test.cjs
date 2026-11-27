@@ -32,9 +32,9 @@ function walkFields(fields, inspect) {
   }
 }
 
-test('manifest identifies a runnable standalone activity at version 1.1.5 for Core API 1.28', () => {
+test('manifest identifies a runnable standalone activity at version 1.1.6 for Core API 1.28', () => {
   assert.equal(library.machineName, 'H5P.ConcordancesPapiJo');
-  assert.deepEqual([library.majorVersion, library.minorVersion, library.patchVersion], [1, 1, 5]);
+  assert.deepEqual([library.majorVersion, library.minorVersion, library.patchVersion], [1, 1, 6]);
   assert.deepEqual(library.coreApi, { majorVersion: 1, minorVersion: 28 });
   assert.equal(library.runnable, 1);
   assert.deepEqual(library.embedTypes, ['iframe']);
@@ -43,7 +43,7 @@ test('manifest identifies a runnable standalone activity at version 1.1.5 for Co
     assert.ok(library[key].length > 0);
   }
   assert.match(library.description, /saved-state restoration and xAPI completion/i);
-  assert.equal(packageJson.version, '1.1.5');
+  assert.equal(packageJson.version, '1.1.6');
 });
 
 test('runtime depends only on official Question 1.5 and guards optional themed Start creation', () => {
@@ -90,7 +90,7 @@ test('semantics have valid foundation field types and unique sibling names', () 
     if (entry.optional !== undefined) assert.equal(typeof entry.optional, 'boolean');
     if (entry.common !== undefined) assert.equal(typeof entry.common, 'boolean');
     if (entry.widget !== undefined) {
-      assert.ok(['textarea', 'none', 'showWhen'].includes(entry.widget));
+      assert.ok(['textarea', 'html', 'none', 'showWhen'].includes(entry.widget));
       if (entry.widget === 'textarea') assert.equal(entry.type, 'text');
     }
     if (entry.type === 'boolean' && entry.default !== undefined) {
@@ -99,16 +99,26 @@ test('semantics have valid foundation field types and unique sibling names', () 
   });
 });
 
-test('activity includes a required plain title and optional multiline introduction and distractors', () => {
+test('activity includes a required plain title and optional multiline distractors', () => {
   const title = field(activity.fields, 'title');
   assert.equal(title.type, 'text');
   assert.equal(title.optional, false);
-  for (const name of ['introduction', 'distractors']) {
+  for (const name of ['distractors']) {
     const entry = field(activity.fields, name);
     assert.equal(entry.type, 'text');
     assert.equal(entry.widget, 'textarea');
     assert.equal(entry.optional, true);
   }
+});
+
+test('introduction semantics use the standard optional Task description HTML editor', () => {
+  assert.deepEqual(field(activity.fields, 'introduction'), {
+    name: 'introduction', type: 'text', widget: 'html', label: 'Task description',
+    importance: 'medium', default: 'Guess the missing keyword in each of these contexts.',
+    description: 'A guide telling the user how to do this task.', optional: true,
+    tags: ['strong', 'em', 'u', 'a', 'ul', 'ol', 'h2', 'h3', 'h4', 'h5', 'hr'],
+    font: {size: true, family: true, color: true, background: true}
+  });
 });
 
 test('Sets use a repeatable group list with a minimum and default of one and VerticalTabs', () => {
@@ -202,11 +212,24 @@ test('answer mode and Retry are visible while Show solution stays hidden', () =>
   assert.equal(field(behaviour.fields, 'enableSolutionsButton').default, false);
 });
 
-test('all semantic text stays plain without unintended rich-text formatting or HTML labels', () => {
+test('informational tutorial field comes first with the supplied editor markup', () => {
+  assert.deepEqual(semantics[0], {
+    name: 'info',
+    type: 'boolean',
+    label: 'Tutorial and Examples: <a href="http://www.h5p.rezeau.org" target="_blank" rel="noopener">Papi Jo\'s H5P WordPress site</a></span>',
+    description: '<span style="color: white;margin-top: -20px;display: table-caption;font-size: large;">█</span>'
+  });
+  assert.equal(semantics[1], activity);
+});
+
+test('semantic text stays plain except for introduction formatting and informational editor markup', () => {
   walkFields(semantics, (entry) => {
-    assert.notEqual(entry.widget, 'html');
-    for (const property of ['tags', 'font', 'enterMode']) assert.equal(entry[property], undefined);
+    if (entry !== field(activity.fields, 'introduction')) {
+      assert.notEqual(entry.widget, 'html');
+      for (const property of ['tags', 'font', 'enterMode']) assert.equal(entry[property], undefined);
+    }
     for (const property of ['label', 'description', 'default']) {
+      if (entry === field(semantics, 'info') && ['label', 'description'].includes(property)) continue;
       if (typeof entry[property] === 'string') assert.doesNotMatch(entry[property], /<[^>]*>/);
     }
   });

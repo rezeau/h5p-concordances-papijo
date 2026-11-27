@@ -1,5 +1,11 @@
 [
   {
+    "name": "info",
+    "type": "boolean",
+    "label": "Tutorial and Examples: <a href=\"http://www.h5p.rezeau.org\" target=\"_blank\" rel=\"noopener\">Papi Jo's H5P WordPress site</a></span>",
+    "description": "<span style=\"color: white;margin-top: -20px;display: table-caption;font-size: large;\">█</span>"
+  },
+  {
     "name": "activity",
     "type": "group",
     "label": "Activity",
@@ -16,9 +22,31 @@
       {
         "name": "introduction",
         "type": "text",
-        "widget": "textarea",
-        "label": "Introduction",
-        "optional": true
+        "widget": "html",
+        "label": "Task description",
+        "importance": "medium",
+        "default": "Guess the missing keyword in each of these contexts.",
+        "description": "A guide telling the user how to do this task.",
+        "optional": true,
+        "tags": [
+          "strong",
+          "em",
+          "u",
+          "a",
+          "ul",
+          "ol",
+          "h2",
+          "h3",
+          "h4",
+          "h5",
+          "hr"
+        ],
+        "font": {
+          "size": true,
+          "family": true,
+          "color": true,
+          "background": true
+        }
       },
       {
         "name": "distractors",

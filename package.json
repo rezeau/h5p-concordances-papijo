@@ -1,6 +1,6 @@
 {
   "name": "h5p-concordances-papijo",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "private": true,
   "description": "Standalone concordance activity with automatic gaps, category filtering, partial scoring, results, Retry, saved-state restoration and xAPI completion.",
   "license": "MIT",
